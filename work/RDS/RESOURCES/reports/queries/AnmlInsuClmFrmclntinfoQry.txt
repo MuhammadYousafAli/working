@@ -1,0 +1,23 @@
+select c.clnt_id,c.frst_nm||' '||c.last_nm clnt_nm,c.cnic_num,c.PH_NUM,
+                  dr.DT_OF_INCDNT dt_of_dth,dr.CAUSE_OF_INCDNT cause_of_dth,dr.INCDNT_EFFECTEE clnt_nom_flg,app.APRVD_LOAN_AMT, app.LOAN_APP_STS_DT,
+                  cr.frst_nm||' '||cr.last_nm rel_nm,app.loan_app_seq,mar.ANML_TYP,anm_typ.REF_CD_DSCR,
+                  mar.TAG_NUM,mar.PRCH_AMT,mar.AGE_MNTH,mar.AGE_YR,
+                  ( 'H No '||ad.HSE_NUM ||' ,St No '|| ad.STRT||' ,'|| ad.oth_dtl ||' ,'||city.CITY_NM||','||dist.dist_nm||','||cntry.cntry_nm ) addr,mar.ANML_PIC,mar.TAG_PIC,c.clnt_seq
+                  from mw_clnt c
+                  join mw_loan_app app on app.clnt_seq = c.clnt_seq and app.crnt_rec_flg=1 and app.prnt_loan_app_seq=app.loan_app_seq
+                  join mw_ref_cd_val val on val.ref_cd_seq=app.loan_app_sts and val.crnt_rec_flg=1 and val.del_flg=0 and val.ref_cd ='0005'
+                  join mw_ref_cd_grp grp on grp.ref_cd_grp_seq = val.ref_cd_grp_key and grp.crnt_rec_flg=1 and grp.ref_cd_grp = '0106'
+                  join mw_anml_rgstr mar on mar.LOAN_APP_SEQ = app.LOAN_APP_SEQ and mar.CRNT_REC_FLG = 1
+                  join mw_ref_cd_val anm_typ on anm_typ.ref_cd_seq=mar.ANML_TYP and anm_typ.crnt_rec_flg=1 -- and anm_typ.del_flg=0
+                  join mw_incdnt_rpt dr on dr.clnt_seq=mar.ANML_RGSTR_SEQ and dr.crnt_rec_flg= 1 and dr.crtd_dt>app.crtd_dt and (dr.INCDNT_EFFECTEE=3 OR dr.INCDNT_EFFECTEE=4)
+                  join mw_addr_rel addrRel on addrrel.enty_key = c.clnt_seq and addrRel.enty_typ='Client' and addrRel.crnt_rec_flg=1 and addrRel.del_flg=0
+                  join mw_addr ad on ad.addr_seq = addrRel.addr_seq and ad.crnt_rec_flg=1 and ad.del_flg=0
+                  join mw_city_uc_rel rel on rel.city_uc_rel_seq = ad.city_seq and rel.crnt_rec_flg=1 and rel.del_flg = 0
+                  join mw_uc uc on rel.uc_SEQ =uc.UC_SEQ  and uc.del_flg = 0 and uc.crnt_rec_flg = 1
+                  join mw_thsl thsl on uc.thsl_SEQ =thsl.thsl_SEQ and thsl.del_flg = 0 and thsl.crnt_rec_flg = 1
+                  join mw_dist dist on thsl.dist_SEQ =dist.dist_SEQ and dist.del_flg = 0 and dist.crnt_rec_flg = 1
+                  join mw_st st on dist.st_SEQ =st.st_SEQ and st.del_flg = 0  and st.crnt_rec_flg = 1
+                  join mw_cntry cntry on st.cntry_SEQ =cntry.cntry_SEQ and cntry.crnt_rec_flg = 1 and cntry.del_flg=0
+                  join mw_city city on city.city_seq = rel.city_seq  and city.del_flg = 0  and city.crnt_rec_flg = 1
+                  left outer join mw_clnt_rel cr on cr.loan_app_seq = app.prnt_loan_app_seq and cr.rel_typ_flg=1 and cr.crnt_rec_flg = 1
+                  where mar.ANML_RGSTR_SEQ=:anmlRgstrSeq and c.crnt_rec_flg = 1

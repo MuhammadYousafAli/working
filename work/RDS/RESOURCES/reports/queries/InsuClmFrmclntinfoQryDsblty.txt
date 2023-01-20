@@ -1,0 +1,9 @@
+select c.clnt_id,c.frst_nm||' '||c.last_nm clnt_nm,c.cnic_num,c.dob clnt_dob,dsb.DT_OF_INCDNT dt_of_dsblty,dsb.INCDNT_EFFECTEE clnt_nom_flg,cr.frst_nm||' '||cr.last_nm rel_nm,
+                        cr.cnic_num re_cnic,cr.dob rel_dob,app.prnt_loan_app_seq from mw_clnt c
+                        join mw_loan_app app on app.clnt_seq = c.clnt_seq and app.crnt_rec_flg=1 and app.prnt_loan_app_seq=app.loan_app_seq
+                        join mw_ref_cd_val val on val.ref_cd_seq=app.loan_app_sts and val.crnt_rec_flg=1 and val.del_flg=0 and val.ref_cd ='0005'
+                        join mw_ref_cd_grp grp on grp.ref_cd_grp_seq = val.ref_cd_grp_key and grp.crnt_rec_flg=1 and grp.ref_cd_grp = '0106'
+                        join mw_INCDNT_rpt dsb on c.clnt_seq = dsb.clnt_seq and dsb.crnt_rec_flg= 1 and dsb.crtd_dt>app.crtd_dt
+                        join mw_typs t on t.crnt_rec_flg=1 and t.TYP_CTGRY_KEY=2 and t.TYP_ID = '0423'
+                        left outer join mw_clnt_rel cr on cr.loan_app_seq = app.prnt_loan_app_seq and cr.rel_typ_flg=1 and cr.crnt_rec_flg = 1
+                        where c.clnt_seq =:clntSeq and c.crnt_rec_flg = 1 fetch first 1 rows only

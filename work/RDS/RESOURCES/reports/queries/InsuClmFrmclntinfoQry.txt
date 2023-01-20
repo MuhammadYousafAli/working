@@ -1,0 +1,50 @@
+  SELECT /* FileName: InsuClmFrmclntinfoQry
+          * Writted by: Yousaf Ali
+          * Review By: Ali Khubaib
+          * Date: 25-Nov-2022
+          * Reason: Email - Title of Takaful product on insurance claim form */
+         C.CLNT_ID,
+         C.FRST_NM || ' ' || C.LAST_NM       CLNT_NM,
+         C.CNIC_NUM,
+         C.DOB                               CLNT_DOB,
+         DR.DT_OF_INCDNT DT_OF_DTH,
+         DR.CAUSE_OF_INCDNT CAUSE_OF_DTH,
+         DR.INCDNT_EFFECTEE CLNT_NOM_FLG,
+         CR.FRST_NM || ' ' || CR.LAST_NM     REL_NM,
+         CR.CNIC_NUM                         RE_CNIC,
+         CR.DOB                              REL_DOB,
+         MIN (E.INSTR_NUM),
+         MIN (E.CRTD_DT),
+         MIN (APP.PRNT_LOAN_APP_SEQ),
+         MIN (LPAD (TO_CHAR (APP.PRD_SEQ), 4, '0'))
+    FROM MW_CLNT C
+         JOIN MW_LOAN_APP APP
+             ON     APP.CLNT_SEQ = C.CLNT_SEQ
+                AND APP.CRNT_REC_FLG = 1
+                AND APP.PRNT_LOAN_APP_SEQ = APP.LOAN_APP_SEQ
+                AND APP.LOAN_APP_STS = 703
+         JOIN MW_INCDNT_RPT DR
+             ON     C.CLNT_SEQ = DR.CLNT_SEQ
+                AND DR.CRNT_REC_FLG = 1
+                AND DR.CRTD_DT > APP.EFF_START_DT -- NON INDEXED COLUMN dr.crtd_dt
+         JOIN MW_EXP E
+             ON     E.EXP_REF = C.CLNT_SEQ
+                AND E.CRNT_REC_FLG = 1
+                AND E.DEL_FLG = 0
+                AND E.EFF_START_DT > APP.EFF_START_DT
+                AND E.EXPNS_TYP_SEQ = 424
+         LEFT OUTER JOIN MW_CLNT_REL CR
+             ON     CR.LOAN_APP_SEQ = APP.LOAN_APP_SEQ
+                AND CR.REL_TYP_FLG = 1
+                AND CR.CRNT_REC_FLG = 1
+   WHERE C.CLNT_SEQ = :clntSeq AND C.CRNT_REC_FLG = 1
+GROUP BY C.CLNT_ID,
+         C.FRST_NM || ' ' || C.LAST_NM,
+         C.CNIC_NUM,
+         C.DOB,
+         DR.DT_OF_INCDNT,
+         DR.CAUSE_OF_INCDNT,
+         DR.INCDNT_EFFECTEE,
+         CR.FRST_NM || ' ' || CR.LAST_NM,
+         CR.CNIC_NUM,
+         CR.DOB
