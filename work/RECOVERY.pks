@@ -13,6 +13,6 @@ CREATE OR REPLACE package MWX_KASHF_DEV.Recovery as
     procedure postRcvryTrx(mTrxSeq number,mUsrId varchar);
     function getPrdStr(mClntSeq number) return varchar;    
     procedure updtPymtSchedDtl_LOAN_ADJSTMNT(mInstDueDt date,mPymtDt date ,mPymtSchedDtlSeq number,mUserId varchar);
-    PROCEDURE PRC_PPST_LOAN_ASJSTMNT(mInstNum VARCHAR, mPymtDt DATE,mPymtAmt NUMBER,mTypSeq NUMBER,mClntSeq NUMBER,mUsrId VARCHAR,mBrnchSeq NUMBER,mAgntNm VARCHAR,mClntNm VARCHAR,mPostFlg NUMBER,mMsgOut OUT VARCHAR);
+    PROCEDURE PRC_PST_LOAN_ASJSTMNT(mInstNum VARCHAR, mPymtDt DATE,mPymtAmt NUMBER,mTypSeq NUMBER,mClntSeq NUMBER,mUsrId VARCHAR,mBrnchSeq NUMBER,mAgntNm VARCHAR,mClntNm VARCHAR,mPostFlg NUMBER,mMsgOut OUT VARCHAR);
 end;
 /

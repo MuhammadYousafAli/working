@@ -4364,7 +4364,7 @@ AS
 
         RETURN vPrdStr;
     END;
-PROCEDURE PRC_PPST_LOAN_ASJSTMNT(mInstNum       VARCHAR,
+PROCEDURE PRC_PST_LOAN_ASJSTMNT(mInstNum       VARCHAR,
                             mPymtDt        DATE,
                             mPymtAmt       NUMBER,
                             mTypSeq        NUMBER,

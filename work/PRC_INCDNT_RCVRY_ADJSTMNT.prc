@@ -57,7 +57,7 @@ BEGIN
             RETURN;
         END IF;
 
-        RECOVERY.PRC_PPST_LOAN_ASJSTMNT ('LOAN ADJUSTMENT',
+        RECOVERY.PRC_PST_LOAN_ASJSTMNT ('LOAN ADJUSTMENT',
                                          SYSDATE,
                                          P_ADJSTMNT_AMT,
                                          301,

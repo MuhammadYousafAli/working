@@ -20,8 +20,10 @@ AS
     P_INCDNT_RTN_JV_MSG   VARCHAR2 (500);
     
     V_RVRSL_JV_FOUND       NUMBER;
-    V_RVRSL_RCV_FOUND       NUMBER;
+    V_RVRSL_RCV_FOUND      NUMBER;
+    V_EXCESS_RCV_FOUND     NUMBER;
 BEGIN
+
       SELECT BRNCH_SEQ
         INTO V_BRNCH_SEQ
         FROM MW_LOAN_APP AP
@@ -242,20 +244,20 @@ BEGIN
 
         ------------  CREATE EXCESS RECOVERIES ------------------
         
-        -----------  IF EXCESS ENTERED ALREADY ----------        
+        -----------  IF  REVERSAL ENTERED----------        
         SELECT COUNT (1)
-            INTO V_RVRSL_RCV_FOUND
+            INTO V_EXCESS_RCV_FOUND
             FROM MW_RCVRY_TRX TRX
          WHERE     TRX.RCVRY_TRX_SEQ = RCV.RCVRY_TRX_SEQ
-               AND TRX.CRNT_REC_FLG = 0
+               AND TRX.CRNT_REC_FLG = 1
                AND TRUNC (TRX.LAST_UPD_DT) = TO_DATE (SYSDATE)
-               AND TRX.DEL_FLG = 1
+               AND TRX.DEL_FLG = 0
                AND TRX.CHNG_RSN_CMNT =
-                      'REVERSE DUE TO INCIDENT PROCESS DATED: '
+                      'EXCESS CREATED DUE TO INCIDENT PROCESS DATED: '
                    || TO_DATE (SYSDATE)
                AND TRX.PYMT_REF = P_CLNT_SEQ;
                
-        IF V_RVRSL_RCV_FOUND != 0
+        IF V_EXCESS_RCV_FOUND = 0
         THEN
             BEGIN
                 SELECT RCVRY_TRX_SEQ.NEXTVAL INTO V_RCVRY_TRX_SEQ FROM DUAL;
@@ -373,7 +375,7 @@ BEGIN
                     || P_CLNT_SEQ;
                 RETURN;
             END;
-        END IF; -----------  V_RVRSL_RCV_FOUND---------------------  END EXCESS RECOVERIES  ------------------------------
+        END IF; -----------  V_EXCESS_RCV_FOUND---------------------  END EXCESS RECOVERIES  ------------------------------
     END LOOP;
 
     P_INCDNT_RTN_MSG := 'SUCCESS';
@@ -381,14 +383,17 @@ EXCEPTION
     WHEN OTHERS
     THEN
         ROLLBACK;
-        KASHF_REPORTING.PRO_LOG_MSG (
-            'PRC_INCDNT_RVRSE_RCVRY',
-               'ISSUE IN RECOVERY REVERSAL:  CLNT==> P_CLNT_SEQ='
-            || P_CLNT_SEQ
-            || SQLERRM);
         P_INCDNT_RTN_MSG :=
-               'ERROR PRC_INCDNT_RVRSE_RCVRY => ISSUE IN RECOVERY REVERSAL:  CLNT==> P_CLNT_SEQ='
-            || P_CLNT_SEQ;
+              'ISSUE IN RECOVERY REVERSAL: LINE NO: '
+            || $$PLSQL_LINE
+            || CHR (10)
+            ||' P_CLNT_SEQ='
+            || P_CLNT_SEQ
+            || SQLERRM
+            || 'TRACE: '
+            || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+        KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
+        
         RETURN;
 END;
 /

@@ -2,9 +2,9 @@
 CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_DT              VARCHAR2,
     P_CLNT_SEQ               NUMBER,
-    P_INCDNT_TYP             NUMBER,  --302296, 302176 -- 302178 302185 302190
-    P_INCDNT_CTGRY           NUMBER,                         -- 302301, 302180
-    P_INCDNT_EFFECTEE        NUMBER,                         -- 302311, 302190
+    P_INCDNT_TYP             NUMBER,  --302203
+    P_INCDNT_CTGRY           NUMBER,                         -- 302207
+    P_INCDNT_EFFECTEE        NUMBER,                         -- 302217
     P_INCDNT_CAUSE           VARCHAR2,
     P_INCDNT_CMNTS           VARCHAR2,
     P_INCDNT_REF             NUMBER,
@@ -14,6 +14,9 @@ CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_RTN_MSG     OUT VARCHAR2)
 AS
     V_INCDNT_DT                DATE;
+    V_CLNT_TAG                 VARCHAR2 (100);
+    V_OD_COUNT                 NUMBER;
+    V_UNPOSTED_RECOVERY        NUMBER;
     V_BRNCH_SEQ                MW_BRNCH.BRNCH_SEQ%TYPE;
     V_PRNT_LOAN_APP_SEQ        MW_LOAN_APP.PRNT_LOAN_APP_SEQ%TYPE;
     V_CNIC_NUM                 MW_CLNT.CNIC_NUM%TYPE;
@@ -120,23 +123,74 @@ AS
                    P_INCDNT_CHRG
                AND STP.CRNT_REC_FLG = 1;
 BEGIN
+
+    V_INCDNT_DT := TO_DATE (P_INCDNT_DT, 'DD-MON-RRRR');
+
+    V_INCDNT_DT := '30-NOV-2022'; ------------- P_INCDNT_DT ---------------
+
+    ------------  CHECK FOR NACTA TAGGED -------------------------
+    SELECT FN_FIND_CLNT_TAGGED ('AML', P_CLNT_SEQ, NULL)
+      INTO V_CLNT_TAG
+      FROM DUAL;
+
+    IF V_CLNT_TAG LIKE 'SUCCESS:%'
+    THEN
+        P_INCDNT_RTN_MSG :=
+            'FAILED: NACTA Matched. Client and other individual/s (Nominee/CO borrower/Next of Kin) cannot be Adjusted';
+        RETURN;
+    END IF;            
+    
+    ----------  CHECK OD --------------
+    
+    SELECT COUNT (1)
+        INTO V_OD_COUNT
+      FROM MW_PYMT_SCHED_DTL  DTL
+           JOIN MW_PYMT_SCHED_HDR HDR
+               ON     HDR.PYMT_SCHED_HDR_SEQ = DTL.PYMT_SCHED_HDR_SEQ
+                  AND HDR.CRNT_REC_FLG = 1
+           JOIN MW_LOAN_APP APP
+               ON APP.LOAN_APP_SEQ = HDR.LOAN_APP_SEQ AND APP.CRNT_REC_FLG = 1
+     WHERE     APP.CLNT_SEQ = P_CLNT_SEQ
+           AND APP.LOAN_APP_STS IN (703, 1305)
+           AND DTL.DUE_DT < V_INCDNT_DT
+           AND APP.OD_CHK_FLG = 0
+           AND DTL.PYMT_STS_KEY IN (945, 1145);
+       
+    IF V_OD_COUNT > 0
+    THEN
+        P_INCDNT_RTN_MSG :=
+            'FAILED: OD CHECK. Client has OD Amount';
+        RETURN;
+    END IF;    
+    
+    -----------  UNPOSTED RECOVERY CHECK --------
+    SELECT COUNT (1)
+        INTO V_UNPOSTED_RECOVERY
+      FROM MW_RCVRY_TRX RCH
+     WHERE RCH.PYMT_REF = P_CLNT_SEQ AND RCH.POST_FLG = 0 AND RCH.CRNT_REC_FLG = 1;
+     
+    IF V_UNPOSTED_RECOVERY > 0
+    THEN
+        P_INCDNT_RTN_MSG :=
+            'FAILED: UNPOSTED RECOVERY. Client has Unposted recovery';
+        RETURN;
+    END IF;   
+    -------------------------------------------------------------------------    
+
     SELECT CNIC_NUM
       INTO V_CNIC_NUM
       FROM MW_CLNT MC
      WHERE MC.CLNT_SEQ = P_CLNT_SEQ AND MC.CRNT_REC_FLG = 1;
 
-    IF P_INCDNT_RVRSE = 0
-    THEN
-        V_INCDNT_DT := TO_DATE (P_INCDNT_DT, 'DD-MON-RRRR');
+    IF P_INCDNT_RVRSE = 0  ----------  FOR INCIDENT ENTRY
+    THEN      
 
-        V_INCDNT_DT := '30-NOV-2022'; ------------- P_INCDNT_DT ---------------
-
-            SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
-              INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
-              FROM MW_LOAN_APP AP
-             WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
-                   AND AP.CRNT_REC_FLG = 1
-                   AND AP.LOAN_APP_STS IN (703, 1305)
+        SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
+          INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
+          FROM MW_LOAN_APP AP
+         WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
+               AND AP.CRNT_REC_FLG = 1
+               AND AP.LOAN_APP_STS IN (703, 1305)
           ORDER BY 2 DESC
         FETCH NEXT 1 ROWS ONLY;
 
@@ -320,6 +374,8 @@ BEGIN
                                            WHERE     MT.TYP_SEQ =
                                                      PSC.CHRG_TYPS_SEQ
                                                  AND MT.CRNT_REC_FLG = 1)
+                                     ELSE
+                                        'NO CHARGE' 
                                  END
                                      INCDNT_CHRG,
                                  IRP.INCDNT_EFFECTEE,
@@ -349,7 +405,7 @@ BEGIN
                                         AND PSC.CRNT_REC_FLG = 1
                            WHERE     IRP.CLNT_SEQ = P_CLNT_SEQ
                                  AND IRP.CRNT_REC_FLG = 1
-                                 AND AP.LOAN_APP_STS = 703
+                                 AND AP.LOAN_APP_STS IN (703,1305)
                                  AND TRUNC (IRP.DT_OF_INCDNT) >=
                                      TRUNC (DSH.DSBMT_DT))
                 GROUP BY INCDNT_TYP,
@@ -369,23 +425,28 @@ BEGIN
                                           CHRGS.INCDNT_EFFECTEE,
                                           CHRGS.INCDNT_CHRG)
                 LOOP
-                    BEGIN
-                        -----------  CALL FUNERAL CHARGES CALCULATION procedure ----------------
-                        PRC_CALC_FNRL_CHRGS (P_CLNT_SEQ,
-                                             V_INCDNT_DT,
-                                             P_INCDNT_USER,
-                                             CHRGS.INCDNT_CHRG,
-                                             STP.PRD_CHRG_CD,
-                                             STP.DED_SM_MNTH,
-                                             STP.DED_BASE_DESC,
-                                             STP.DED_APLD_ON_DESC,
-                                             TO_NUMBER (STP.FXD_PRMUM_DESC),
-                                             P_INCDNT_RTN_MSGCALC,
-                                             V_DED_AMT);
+                    IF CHRGS.INCDNT_CHRG != 'NO CHARGE' --------  IF CLIENT WITH NO ANY CHARGES
+                    THEN
+                        BEGIN
+                            -----------  CALL FUNERAL CHARGES CALCULATION procedure ----------------
+                            PRC_CALC_FNRL_CHRGS (P_CLNT_SEQ,
+                                                 V_INCDNT_DT,
+                                                 P_INCDNT_USER,
+                                                 CHRGS.INCDNT_CHRG,
+                                                 STP.PRD_CHRG_CD,
+                                                 STP.DED_SM_MNTH,
+                                                 STP.DED_BASE_DESC,
+                                                 STP.DED_APLD_ON_DESC,
+                                                 TO_NUMBER (STP.FXD_PRMUM_DESC),
+                                                 P_INCDNT_RTN_MSGCALC,
+                                                 V_DED_AMT);
 
-                        V_DED_AMT_TOT :=
-                            NVL (V_DED_AMT_TOT, 0) + NVL (V_DED_AMT, 0); --------  SUM ALL THE CHARGES TO BE DEDUCT
-                    END;
+                            V_DED_AMT_TOT :=
+                                NVL (V_DED_AMT_TOT, 0) + NVL (V_DED_AMT, 0); --------  SUM ALL THE CHARGES TO BE DEDUCT
+                        END;
+                    ELSE
+                        V_DED_AMT_TOT := 0;
+                    END IF;
 
                     V_INC_PRIMUM_AMT :=
                         NVL (TO_NUMBER (STP.FXD_PRMUM_DESC), 0); -----  SET FUNERAL PERMIUM AMOUT FROM SETUP
@@ -408,7 +469,8 @@ BEGIN
          WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
                AND INC.DT_OF_INCDNT = V_INCDNT_DT
                AND INC.CRNT_REC_FLG = 1;
-    ELSE                         -----------  FOR INCIDENT REVERSAL ----------
+               
+    ELSE   -----------  FOR INCIDENT REVERSAL ----------
         ----------REVERSE EXCESS IF ANY ------------
         FOR RVSL_EX
             IN (  SELECT RCH.RCVRY_TRX_SEQ

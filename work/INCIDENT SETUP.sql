@@ -1210,6 +1210,35 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              NULL,
              1);
 
+INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
+                           EFF_START_DT,
+                           REF_CD_GRP_KEY,
+                           REF_CD,
+                           REF_CD_DSCR,
+                           REF_CD_SORT_ORDR,
+                           REF_CD_ACTIVE_FLG,
+                           CRTD_BY,
+                           CRTD_DT,
+                           LAST_UPD_BY,
+                           LAST_UPD_DT,
+                           DEL_FLG,
+                           EFF_END_DT,
+                           CRNT_REC_FLG)
+     VALUES (REF_CD_SEQ.NEXTVAL,
+             SYSDATE,
+             REF_CD_GRP_SEQ.CURRVAL,
+             '-1',
+             'NO CHARGE',
+             13,
+             1,
+             'yousaf.ali',
+             SYSDATE,
+             'yousaf.ali',
+             SYSDATE,
+             0,
+             NULL,
+             1);             
+
 --------------- CHARGES DEDUCTION -----------------
 
 INSERT INTO MW_REF_CD_GRP (REF_CD_GRP_SEQ,
