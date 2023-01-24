@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
-    P_CLNT_SEQ           NUMBER,
+    P_CLNT_SEQ           NUMBER, --3520173413482
     P_BRNCH_SEQ          NUMBER,
     P_INST_NUM           VARCHAR2,
     P_FUNERAL_AMT        NUMBER,
@@ -9,7 +9,7 @@ CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
     P_POST_FLG           NUMBER,
     P_INCDNT_DT          VARCHAR2,
     P_PYMT_RCT_FLG       NUMBER,
-    P_INCDNT_TYP         VARCHAR2,
+    P_INCDNT_TYP         VARCHAR2, ---302203
     P_INCDNT_REF         NUMBER,
     P_RTN_MSG        OUT VARCHAR2)
 AS
@@ -92,6 +92,74 @@ BEGIN
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADD_FUNERAL_EXP', P_RTN_MSG);
         RETURN;
     END;
+    
+    IF (V_FUNERAL_AMT_REC = 0 AND P_PYMT_RCT_FLG = 1)
+    THEN
+        SELECT EXP_SEQ.NEXTVAL INTO V_EXP_SEQ FROM DUAL;
+        ---------------  TO ADD EXP ENTRY -----------
+        INSERT INTO MW_EXP (EXP_SEQ,
+                            EFF_START_DT,
+                            BRNCH_SEQ,
+                            EXPNS_STS_KEY,
+                            EXPNS_ID,
+                            EXPNS_DSCR,
+                            INSTR_NUM,
+                            EXPNS_AMT,
+                            EXPNS_TYP_SEQ,
+                            CRTD_BY,
+                            CRTD_DT,
+                            LAST_UPD_BY,
+                            LAST_UPD_DT,
+                            DEL_FLG,
+                            EFF_END_DT,
+                            CRNT_REC_FLG,
+                            PYMT_TYP_SEQ,
+                            POST_FLG,
+                            EXP_REF,
+                            PYMT_RCT_FLG,
+                            EXPNS_SYS_GEN_FLG,
+                            RMRKS)
+             VALUES (V_EXP_SEQ,
+                     SYSDATE,
+                     P_BRNCH_SEQ,
+                     200,
+                     EXP_SEQ.CURRVAL,
+                     'FUNERAL CHARGES',
+                     P_INST_NUM,
+                     V_AMT,
+                     424,
+                     P_USER_ID,
+                     SYSDATE,
+                     P_USER_ID,
+                     SYSDATE,
+                     0,
+                     NULL,
+                     1,
+                     P_PYMT_TYP_SEQ,
+                     0,
+                     CASE WHEN P_INCDNT_REF != 0 THEN P_INCDNT_REF ELSE P_CLNT_SEQ END,
+                     P_PYMT_RCT_FLG,
+                     0,
+                     P_REMARKS);
+        UPDATE MW_INCDNT_RPT INC
+       SET INC.INCDNT_STS =
+               (SELECT VL.REF_CD_SEQ
+                  FROM MW_REF_CD_VAL  VL
+                       JOIN MW_REF_CD_GRP GRP
+                           ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                              AND GRP.CRNT_REC_FLG = 1
+                 WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004'),
+           INC.LAST_UPD_DT = SYSDATE,
+           INC.LAST_UPD_BY = P_USER_ID
+     WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
+           AND INC.DT_OF_INCDNT = V_INCDNT_DT
+           AND INC.CRNT_REC_FLG = 1;
+
+        P_RTN_MSG := 'SUCCESS';
+        RETURN;
+    END IF;    
+    
+    
     FOR I
         IN (SELECT PSC.PYMT_SCHED_CHRG_SEQ,
                    PSC.PYMT_SCHED_DTL_SEQ,
@@ -147,10 +215,10 @@ BEGIN
         IF (I.REC > 0 AND V_AMT > 0)
         THEN
             IF V_COUNT = 0
-            THEN
+            THEN                
+                
                 IF P_PYMT_RCT_FLG = 1
                 THEN
-                
                     SELECT EXP_SEQ.NEXTVAL INTO V_EXP_SEQ FROM DUAL;
                     ---------------  TO ADD EXP ENTRY -----------
                     INSERT INTO MW_EXP (EXP_SEQ,
@@ -197,28 +265,12 @@ BEGIN
                                  P_PYMT_RCT_FLG,
                                  0,
                                  P_REMARKS);
-                  
                 END IF;
 
                 SELECT RCVRY_TRX_SEQ.NEXTVAL INTO V_RCVRY_TRX_SEQ FROM DUAL;
 
-                IF P_INCDNT_TYP = 'DEATH'
-                THEN
-                    V_NARRATION := 'CASH FUNERAL ADJUSTMENT';
-                    V_JV_HDR_DESC :=
-                           'FUNERAL Receivable is collected from Client '
-                        || V_CLNT_NM
-                        || ' through CASH';
-                    V_PYMT_STS_KEY := 1500;
-
-                    SELECT GL_ACCT_NUM
-                      INTO V_DBT_GL_ACCT
-                      FROM MW_TYPS MT
-                     WHERE     MT.TYP_ID = '0424'
-                           AND MT.TYP_CTGRY_KEY = 2
-                           AND MT.CRNT_REC_FLG = 1
-                           AND MT.DEL_FLG = 0;
-                ELSIF P_INCDNT_TYP = 'DISABILITY'
+                
+                IF P_INCDNT_TYP = 'DISABILITY'
                 THEN
                     V_NARRATION := 'CASH DISABILITY ADJUSTMENT';
                     V_JV_HDR_DESC :=
@@ -247,6 +299,21 @@ BEGIN
                       INTO V_DBT_GL_ACCT
                       FROM MW_TYPS MT
                      WHERE     MT.TYP_ID = '0001'
+                           AND MT.TYP_CTGRY_KEY = 2
+                           AND MT.CRNT_REC_FLG = 1
+                           AND MT.DEL_FLG = 0;
+                ELSE 
+                    V_NARRATION := 'CASH FUNERAL ADJUSTMENT';
+                    V_JV_HDR_DESC :=
+                           'FUNERAL Receivable is collected from Client '
+                        || V_CLNT_NM
+                        || ' through CASH';
+                    V_PYMT_STS_KEY := 1500;
+
+                    SELECT GL_ACCT_NUM
+                      INTO V_DBT_GL_ACCT
+                      FROM MW_TYPS MT
+                     WHERE     MT.TYP_ID = '0424'
                            AND MT.TYP_CTGRY_KEY = 2
                            AND MT.CRNT_REC_FLG = 1
                            AND MT.DEL_FLG = 0;

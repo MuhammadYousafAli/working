@@ -470,6 +470,22 @@ BEGIN
                AND INC.DT_OF_INCDNT = V_INCDNT_DT
                AND INC.CRNT_REC_FLG = 1;
                
+        IF P_INCDNT_REF <> 0
+        THEN
+            
+            UPDATE MW_ANML_RGSTR RG
+                SET RG.ANML_STS = (SELECT TO_NUMBER(VL.REF_CD)
+                      FROM MW_REF_CD_VAL  VL
+                           JOIN MW_REF_CD_GRP GRP
+                               ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                                  AND GRP.CRNT_REC_FLG = 1
+                     WHERE GRP.REF_CD_GRP = '0415' AND VL.REF_CD_DSCR = P_INCDNT_CTGRY),
+                RG.LAST_UPD_BY = P_INCDNT_USER,
+                RG.LAST_UPD_DT = SYSDATE
+               WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
+            
+        END IF;
+               
     ELSE   -----------  FOR INCIDENT REVERSAL ----------
         ----------REVERSE EXCESS IF ANY ------------
         FOR RVSL_EX
@@ -772,6 +788,18 @@ BEGIN
                                   AND GRP.CRNT_REC_FLG = 1
                      WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
                AND RPT.CRNT_REC_FLG = 1;
+               
+        IF P_INCDNT_REF <> 0
+        THEN
+            
+            UPDATE MW_ANML_RGSTR RG
+                SET RG.ANML_STS = -1,
+                RG.LAST_UPD_BY = P_INCDNT_USER,
+                RG.LAST_UPD_DT = SYSDATE
+               WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
+            
+        END IF;
+
     END IF;
 
     P_INCDNT_RTN_MSG := 'SUCCESS';

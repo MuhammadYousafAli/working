@@ -49,8 +49,7 @@ BEGIN
         V_SM_MNTH_CHRGS := 0;
 
         IF RNK.RANK = 1
-        THEN
-        
+        THEN           
             ---- =============  Same month Charges ======--------
             BEGIN
                 SELECT NVL(SUM (NVL (DUE, 0)) - SUM (NVL (REC, 0)),0) CHRGS,

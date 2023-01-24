@@ -293,7 +293,7 @@ BEGIN
                 SELECT GL_ACCT_NUM
                   INTO V_DBT_GL_ACCT_NUM
                   FROM MW_TYPS MT
-                 WHERE     MT.TYP_ID = REC.CHRG_TYP_KEY
+                 WHERE     MT.TYP_SEQ = REC.CHRG_TYP_KEY
                        AND MT.CRNT_REC_FLG = 1
                        AND MT.DEL_FLG = 0;
             END IF;
@@ -302,8 +302,7 @@ BEGIN
               INTO V_CRD_GL_ACCT_NUM
               FROM MW_TYPS MT
              WHERE     MT.TYP_SEQ = REC.RCVRY_TYP_SEQ
-                   AND MT.CRNT_REC_FLG = 1
-                   AND MT.DEL_FLG = 0;
+                   AND MT.CRNT_REC_FLG = 1;
 
             PRC_JV ('DTL',                -- INSERTION TYPE: HDR/DTL, HDR, DTL
                     0,                             -- EXPENSE/RECOVERY/ANY SEQ
