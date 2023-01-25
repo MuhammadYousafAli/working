@@ -2,7 +2,7 @@ CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
     P_CLNT_SEQ           NUMBER, --3520173413482
     P_BRNCH_SEQ          NUMBER,
     P_INST_NUM           VARCHAR2,
-    P_FUNERAL_AMT        NUMBER,
+    P_FUNERAL_AMT        NUMBER, 
     P_USER_ID            VARCHAR2,
     P_PYMT_TYP_SEQ       NUMBER,
     P_REMARKS            VARCHAR2,
@@ -14,6 +14,7 @@ CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
     P_RTN_MSG        OUT VARCHAR2)
 AS
     V_INCDNT_DT        DATE;
+    V_FNRL_ALREADY_ENTERED  NUMBER;
     V_INCDNT_TYP       NUMBER;
     V_INCDNT_CTGRY     NUMBER;
     V_INCDNT_EFFECTEE  NUMBER;
@@ -26,6 +27,7 @@ AS
     V_NARRATION        VARCHAR2 (200);
     V_EXP_SEQ          NUMBER;
     V_PYMT_STS_KEY     NUMBER;
+    V_INCDNT_REF       NUMBER := P_INCDNT_REF;
     V_DBT_GL_ACCT      MW_TYPS.GL_ACCT_NUM%TYPE;
     V_CRT_GL_ACCT      MW_TYPS.GL_ACCT_NUM%TYPE;
     V_AMT              NUMBER := P_FUNERAL_AMT;
@@ -36,6 +38,28 @@ AS
 BEGIN
     V_INCDNT_DT := TO_DATE (P_INCDNT_DT, 'DD-MON-RRRR');
     V_INCDNT_DT := '30-NOV-2022';    ------------- P_INCDNT_DT ---------------
+    V_INCDNT_REF := 36501021862549401;
+    ----------------  TO CHECK IF FUNERAL ADDED ALREADY ---------
+    BEGIN
+        SELECT COUNT(1)
+            INTO V_FNRL_ALREADY_ENTERED
+          FROM MW_INCDNT_RPT INC
+        WHERE INC.INCDNT_STS IN
+               (SELECT VL.REF_CD_SEQ
+                  FROM MW_REF_CD_VAL  VL
+                       JOIN MW_REF_CD_GRP GRP
+                           ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                              AND GRP.CRNT_REC_FLG = 1
+                 WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD != '0001')
+           AND INC.CLNT_SEQ = P_CLNT_SEQ
+           AND INC.CRNT_REC_FLG = 1;
+           
+        IF V_FNRL_ALREADY_ENTERED <> 0
+        THEN
+            P_RTN_MSG := 'FAILED: FUNERAL IS ADDED ALREADY';
+            RETURN;
+        END IF;
+    END;
 
     ------------  CHECK FOR NACTA TAGGED -------------------------
     SELECT FN_FIND_CLNT_TAGGED ('AML', P_CLNT_SEQ, NULL)
@@ -137,7 +161,7 @@ BEGIN
                      1,
                      P_PYMT_TYP_SEQ,
                      0,
-                     CASE WHEN P_INCDNT_REF != 0 THEN P_INCDNT_REF ELSE P_CLNT_SEQ END,
+                     CASE WHEN V_INCDNT_REF != 0 THEN V_INCDNT_REF ELSE P_CLNT_SEQ END,
                      P_PYMT_RCT_FLG,
                      0,
                      P_REMARKS);
@@ -261,7 +285,7 @@ BEGIN
                                  1,
                                  P_PYMT_TYP_SEQ,
                                  0,
-                                 CASE WHEN P_INCDNT_REF != 0 THEN P_INCDNT_REF ELSE P_CLNT_SEQ END,
+                                 CASE WHEN V_INCDNT_REF != 0 THEN V_INCDNT_REF ELSE P_CLNT_SEQ END,
                                  P_PYMT_RCT_FLG,
                                  0,
                                  P_REMARKS);

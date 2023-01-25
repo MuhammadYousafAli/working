@@ -479,7 +479,7 @@ BEGIN
                            JOIN MW_REF_CD_GRP GRP
                                ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
                                   AND GRP.CRNT_REC_FLG = 1
-                     WHERE GRP.REF_CD_GRP = '0415' AND VL.REF_CD_DSCR = P_INCDNT_CTGRY),
+                     WHERE GRP.REF_CD_GRP = '0415' AND VL.REF_CD_SEQ = P_INCDNT_CTGRY),
                 RG.LAST_UPD_BY = P_INCDNT_USER,
                 RG.LAST_UPD_DT = SYSDATE
                WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
