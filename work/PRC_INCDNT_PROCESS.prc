@@ -2,9 +2,9 @@
 CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_DT              VARCHAR2,
     P_CLNT_SEQ               NUMBER,
-    P_INCDNT_TYP             NUMBER,  --302203
-    P_INCDNT_CTGRY           NUMBER,                         -- 302207
-    P_INCDNT_EFFECTEE        NUMBER,                         -- 302217
+    P_INCDNT_TYP             NUMBER,  --302206
+    P_INCDNT_CTGRY           NUMBER,                         -- 302214
+    P_INCDNT_EFFECTEE        NUMBER,                         -- 302220
     P_INCDNT_CAUSE           VARCHAR2,
     P_INCDNT_CMNTS           VARCHAR2,
     P_INCDNT_REF             NUMBER,

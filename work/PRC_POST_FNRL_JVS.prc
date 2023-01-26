@@ -1,3 +1,4 @@
+/* Formatted on 26/01/2023 3:10:14 pm (QP5 v5.326) */
 CREATE OR REPLACE PROCEDURE PRC_POST_FNRL_JVS (P_CLNT_SEQ        NUMBER,
                                                P_EXPNS_SEQ       NUMBER,
                                                P_RCVRY_SEQ       NUMBER, --59839447
@@ -9,6 +10,8 @@ AS
     V_ERROR_MSG         VARCHAR2 (500);
     V_EXPNS_TYP_SEQ     NUMBER;
     V_PYMT_TYP_SEQ      NUMBER;
+    V_CLNT_SEQ          NUMBER;
+    V_EXP_FOUND         NUMBER := 0;
     V_EXPNS_AMT         NUMBER;
     V_PYMT_RCT_FLG      NUMBER;
     V_EXPNS_TYP_STR     VARCHAR2 (200);
@@ -65,17 +68,53 @@ BEGIN
         END;
 
         BEGIN
-                SELECT CLNT.FRST_NM || ' ' || CLNT.LAST_NM
-                  INTO V_CLNT_NM
-                  FROM MW_CLNT CLNT
-                       JOIN MW_LOAN_APP LA
-                           ON     LA.CLNT_SEQ = CLNT.CLNT_SEQ
-                              AND LA.CRNT_REC_FLG = 1
-                              AND LA.LOAN_APP_STS = 703
-                 WHERE CLNT.CRNT_REC_FLG = 1 AND CLNT.CLNT_SEQ = P_CLNT_SEQ
-              GROUP BY CLNT.FRST_NM || ' ' || CLNT.LAST_NM
-              ORDER BY 1 DESC
-            FETCH NEXT 1 ROWS ONLY;
+            SELECT COUNT (1)
+              INTO V_EXP_FOUND
+              FROM MW_EXP ME
+             WHERE     ME.EXP_REF = P_CLNT_SEQ
+                   AND ME.CRNT_REC_FLG = 1
+                   AND ME.DEL_FLG = 0;
+
+            IF V_EXP_FOUND <> 0
+            THEN
+                    SELECT CLNT_SEQ
+                      INTO V_CLNT_SEQ
+                      FROM MW_EXP ME
+                           JOIN MW_ANML_RGSTR RG
+                               ON     RG.ANML_RGSTR_SEQ = ME.EXP_REF
+                                  AND RG.CRNT_REC_FLG = 1
+                           JOIN MW_LOAN_APP AP
+                               ON     AP.LOAN_APP_SEQ = RG.LOAN_APP_SEQ
+                                  AND AP.CRNT_REC_FLG = 1
+                                  AND AP.LOAN_APP_STS = 703
+                     WHERE RG.ANML_RGSTR_SEQ = P_CLNT_SEQ
+                  ORDER BY 1 DESC
+                FETCH NEXT 1 ROWS ONLY;
+
+                    SELECT CLNT.FRST_NM || ' ' || CLNT.LAST_NM
+                      INTO V_CLNT_NM
+                      FROM MW_CLNT CLNT
+                           JOIN MW_LOAN_APP LA
+                               ON     LA.CLNT_SEQ = CLNT.CLNT_SEQ
+                                  AND LA.CRNT_REC_FLG = 1
+                                  AND LA.LOAN_APP_STS = 703
+                     WHERE CLNT.CRNT_REC_FLG = 1 AND CLNT.CLNT_SEQ = V_CLNT_SEQ
+                  GROUP BY CLNT.FRST_NM || ' ' || CLNT.LAST_NM
+                  ORDER BY 1 DESC
+                FETCH NEXT 1 ROWS ONLY;
+            ELSE
+                    SELECT CLNT.CLNT_SEQ, CLNT.FRST_NM || ' ' || CLNT.LAST_NM
+                      INTO V_CLNT_SEQ, V_CLNT_NM
+                      FROM MW_CLNT CLNT
+                           JOIN MW_LOAN_APP LA
+                               ON     LA.CLNT_SEQ = CLNT.CLNT_SEQ
+                                  AND LA.CRNT_REC_FLG = 1
+                                  AND LA.LOAN_APP_STS = 703
+                     WHERE CLNT.CRNT_REC_FLG = 1 AND CLNT.CLNT_SEQ = P_CLNT_SEQ
+                  GROUP BY CLNT.FRST_NM || ' ' || CLNT.LAST_NM
+                  ORDER BY 1 DESC
+                FETCH NEXT 1 ROWS ONLY;
+            END IF;
         EXCEPTION
             WHEN OTHERS
             THEN
@@ -150,7 +189,7 @@ BEGIN
                     V_EXPNS_BR_SEQ,
                     P_USER_ID,
                     V_RTN_STS,
-                    P_CLNT_SEQ);
+                    V_CLNT_SEQ);
 
             IF V_RTN_STS != 'SUCCESS'
             THEN
@@ -301,8 +340,7 @@ BEGIN
             SELECT GL_ACCT_NUM
               INTO V_CRD_GL_ACCT_NUM
               FROM MW_TYPS MT
-             WHERE     MT.TYP_SEQ = REC.RCVRY_TYP_SEQ
-                   AND MT.CRNT_REC_FLG = 1;
+             WHERE MT.TYP_SEQ = REC.RCVRY_TYP_SEQ AND MT.CRNT_REC_FLG = 1;
 
             PRC_JV ('DTL',                -- INSERTION TYPE: HDR/DTL, HDR, DTL
                     0,                             -- EXPENSE/RECOVERY/ANY SEQ
@@ -339,10 +377,11 @@ BEGIN
 
     UPDATE MW_RCVRY_TRX RCH
        SET RCH.POST_FLG = 1,
-       RCH.LAST_UPD_BY = P_USER_ID,
-       RCH.LAST_UPD_DT = SYSDATE
-     WHERE RCH.RCVRY_TRX_SEQ = P_RCVRY_SEQ AND RCH.POST_FLG = 0
-     AND RCH.CRNT_REC_FLG = 1;
+           RCH.LAST_UPD_BY = P_USER_ID,
+           RCH.LAST_UPD_DT = SYSDATE
+     WHERE     RCH.RCVRY_TRX_SEQ = P_RCVRY_SEQ
+           AND RCH.POST_FLG = 0
+           AND RCH.CRNT_REC_FLG = 1;
 
     UPDATE MW_INCDNT_RPT INC
        SET INC.INCDNT_STS =
