@@ -70,10 +70,9 @@ BEGIN
         BEGIN
             SELECT COUNT (1)
               INTO V_EXP_FOUND
-              FROM MW_EXP ME
-             WHERE     ME.EXP_REF = P_CLNT_SEQ
-                   AND ME.CRNT_REC_FLG = 1
-                   AND ME.DEL_FLG = 0;
+              FROM MW_ANML_RGSTR R
+             WHERE     R.ANML_RGSTR_SEQ = P_CLNT_SEQ
+                   AND R.CRNT_REC_FLG = 1;
 
             IF V_EXP_FOUND <> 0
             THEN
@@ -111,7 +110,7 @@ BEGIN
                                   AND LA.CRNT_REC_FLG = 1
                                   AND LA.LOAN_APP_STS = 703
                      WHERE CLNT.CRNT_REC_FLG = 1 AND CLNT.CLNT_SEQ = P_CLNT_SEQ
-                  GROUP BY CLNT.FRST_NM || ' ' || CLNT.LAST_NM
+                  GROUP BY CLNT.CLNT_SEQ, CLNT.FRST_NM || ' ' || CLNT.LAST_NM
                   ORDER BY 1 DESC
                 FETCH NEXT 1 ROWS ONLY;
             END IF;

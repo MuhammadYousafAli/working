@@ -105,6 +105,7 @@ EXCEPTION
         RAISE;
 END;
 
+
 --------------- INCDNT TYPE -----------------
 
 INSERT INTO MW_REF_CD_GRP (REF_CD_GRP_SEQ,
@@ -1791,6 +1792,22 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              0,
              NULL,
              1);                     
+             
+             
+
+-------------  insert VEHICLE INSURANCE CLAIM for sawari ------
+
+Insert into MW_TYPS
+   (TYP_SEQ, EFF_START_DT, TYP_ID, TYP_STR, GL_ACCT_NUM, 
+    TYP_STS_KEY, TYP_CTGRY_KEY, CRTD_BY, CRTD_DT, LAST_UPD_BY, 
+    LAST_UPD_DT, DEL_FLG, EFF_END_DT, CRNT_REC_FLG, PERD_FLG, 
+    DFRD_ACCT_NUM, BRNCH_SEQ, BDDT_ACCT_NUM)
+ Values
+   (453, SYSDATE, '0453', 'VEHICLE INSURANCE CLAIM', '000.000.203725.00000', 
+    201, 2, 'yousaf.ali', SYSDATE, 'yousaf.ali', 
+    SYSDATE, 0, NULL, 1, 0, 
+    NULL, 0, NULL);
+                 
 ----------------- MW_STP_INCDNT ----------------
 
 CREATE SEQUENCE INCDNT_STP_SEQ

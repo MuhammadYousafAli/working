@@ -5,6 +5,8 @@ CREATE OR REPLACE PROCEDURE PRC_INCDNT_RCVRY_ADJSTMNT (
     P_USER_ID             VARCHAR2,
     P_MSG_RCVRY_ADJ   OUT VARCHAR2)
 AS
+    V_ANML_FOUND           NUMBER;
+    V_CLNT_SEQ             NUMBER := P_CLNT_SEQ;
     V_AML_FOUND            VARCHAR2 (200);
     V_UNPOSTED_REC_FOUND   NUMBER := 0;
     V_UNPOSTED_EXP_FOUND   NUMBER := 0;
@@ -12,7 +14,47 @@ AS
     V_CNIC_NUM             MW_CLNT.CNIC_NUM%TYPE;
     P_MSG_RCVRY_OUT        VARCHAR2 (500);
 BEGIN
-    SELECT FN_FIND_CLNT_TAGGED ('AML', P_CLNT_SEQ, NULL)
+
+    ------------  GET CLIENT INFO ------------
+    BEGIN
+        SELECT COUNT (1)
+          INTO V_ANML_FOUND
+          FROM MW_ANML_RGSTR R
+         WHERE     R.ANML_RGSTR_SEQ = P_CLNT_SEQ
+               AND R.CRNT_REC_FLG = 1;
+
+        IF V_ANML_FOUND <> 0
+        THEN
+            SELECT CLNT_SEQ
+                INTO V_CLNT_SEQ
+              FROM MW_ANML_RGSTR RG
+                   JOIN MW_LOAN_APP AP
+                       ON     AP.LOAN_APP_SEQ = RG.LOAN_APP_SEQ
+                          AND AP.CRNT_REC_FLG = 1
+                          AND AP.LOAN_APP_STS = 703
+                 WHERE RG.ANML_RGSTR_SEQ = 299000030039405 AND RG.CRNT_REC_FLG = 1
+              ORDER BY 1 DESC
+            FETCH NEXT 1 ROWS ONLY;        
+        END IF;
+    EXCEPTION
+    WHEN OTHERS
+    THEN
+        ROLLBACK;
+        P_MSG_RCVRY_ADJ :=
+               'PRC_INCDNT_RCVRY_ADJSTMNT ==> ERROR IN GETTING CLNT ID => LINE NO: '
+            || $$PLSQL_LINE
+            || CHR (10)
+            || ' ERROR CODE: '
+            || SQLCODE
+            || ' ERROR MESSAGE: '
+            || SQLERRM
+            || 'TRACE: '
+            || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+        KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RCVRY_ADJSTMNT', P_MSG_RCVRY_ADJ);
+        RETURN;
+    END;
+
+    SELECT FN_FIND_CLNT_TAGGED ('AML', V_CLNT_SEQ, NULL)
       INTO V_AML_FOUND
       FROM DUAL;
 
@@ -26,7 +68,7 @@ BEGIN
         SELECT BRNCH_SEQ
           INTO V_BRNCH_SEQ
           FROM MW_LOAN_APP AP
-         WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
+         WHERE     AP.CLNT_SEQ = V_CLNT_SEQ
                AND AP.CRNT_REC_FLG = 1
                AND AP.LOAN_APP_STS IN (703, 1305)
       GROUP BY BRNCH_SEQ
@@ -37,14 +79,14 @@ BEGIN
         SELECT COUNT (1)
           INTO V_UNPOSTED_REC_FOUND
           FROM MW_RCVRY_TRX TRX
-         WHERE     TRX.PYMT_REF = P_CLNT_SEQ
+         WHERE     TRX.PYMT_REF = V_CLNT_SEQ
                AND TRX.CRNT_REC_FLG = 1
                AND TRX.POST_FLG = 0;
 
         SELECT COUNT (1)
           INTO V_UNPOSTED_EXP_FOUND
           FROM MW_EXP EXP
-         WHERE     EXP.EXP_REF = P_CLNT_SEQ
+         WHERE     EXP.EXP_REF = V_CLNT_SEQ
                AND EXP.CRNT_REC_FLG = 1
                AND EXP.POST_FLG = 0;
 
@@ -53,7 +95,7 @@ BEGIN
             ROLLBACK;
             P_MSG_RCVRY_ADJ :=
                    'PLEASE POST ALL UNPOSTED TRNSACTIONS FIRST FOR CLNT_SEQ : '
-                || P_CLNT_SEQ;
+                || V_CLNT_SEQ;
             RETURN;
         END IF;
 
@@ -61,7 +103,7 @@ BEGIN
                                          SYSDATE,
                                          P_ADJSTMNT_AMT,
                                          301,
-                                         P_CLNT_SEQ,
+                                         V_CLNT_SEQ,
                                          P_USER_ID,
                                          V_BRNCH_SEQ,
                                          'LOAN ADJUSTMENT',
@@ -72,11 +114,15 @@ BEGIN
         IF P_MSG_RCVRY_OUT != 'SUCCESS'
         THEN
             ROLLBACK;
-            P_MSG_RCVRY_ADJ :=
-                   'PRC_INCDNT_RCVRY_ADJSTMNT - ISSUE IN LOAN ADJUSTMENT ==> ERROR CODE : '
-                || SQLCODE
-                || ' ERROR MSG : '
-                || SUBSTR (SQLERRM, 1, 200);
+                P_MSG_RCVRY_ADJ :=
+                  'ISSUE IN RECOVERY.PRC_PST_LOAN_ASJSTMNT P_MSG_RCVRY_OUT ==> . '||P_MSG_RCVRY_OUT
+                || CHR (10)
+                ||' P_CLNT_SEQ='
+                || V_CLNT_SEQ
+                || SQLERRM
+                || 'TRACE: '
+                || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RCVRY_ADJSTMNT',P_MSG_RCVRY_ADJ);            
             RETURN;
         END IF;
     EXCEPTION
@@ -84,10 +130,15 @@ BEGIN
         THEN
             ROLLBACK;
             P_MSG_RCVRY_ADJ :=
-                   'PRC_INCDNT_RCVRY_ADJSTMNT - ISSUE IN LOAN ADJUSTMENT ==> ERROR CODE : '
-                || SQLCODE
-                || ' ERROR MSG : '
-                || SUBSTR (SQLERRM, 1, 200);
+                  'PRC_INCDNT_RCVRY_ADJSTMNT - ISSUE IN LOAN ADJUSTMENT ==> . LINE NO. :'
+                || $$PLSQL_LINE
+                || CHR (10)
+                ||' P_CLNT_SEQ='
+                || V_CLNT_SEQ
+                || SQLERRM
+                || 'TRACE: '
+                || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RCVRY_ADJSTMNT',P_MSG_RCVRY_ADJ);             
             RETURN;
     END;
 
@@ -101,7 +152,7 @@ BEGIN
                  WHERE     VL.CRNT_REC_FLG = 1
                        AND GRP.REF_CD_GRP = 425
                        AND VL.REF_CD = '0003')
-     WHERE     RPT.CLNT_SEQ = P_CLNT_SEQ
+     WHERE     RPT.CLNT_SEQ = V_CLNT_SEQ
            AND RPT.CRNT_REC_FLG = 1
            AND RPT.INCDNT_STS =
                (SELECT REF_CD_SEQ
@@ -118,13 +169,16 @@ EXCEPTION
     WHEN OTHERS
     THEN
         ROLLBACK;
-        KASHF_REPORTING.PRO_LOG_MSG (
-            'PRC_INCDNT_RCVRY_ADJSTMNT',
-               'ISSUE IN LOAN ADJUSTMENT:  CLNT==> P_CLNT_SEQ='
-            || P_CLNT_SEQ
-            || SQLERRM);
         P_MSG_RCVRY_ADJ :=
-               'ERROR PRC_INCDNT_RCVRY_ADJSTMNT => ISSUE IN LOAN ADJUSTMENT:  CLNT==> P_CLNT_SEQ='
-            || P_CLNT_SEQ;
+              'ISSUE IN PRC_INCDNT_RCVRY_ADJSTMNT : LINE NO: '
+            || $$PLSQL_LINE
+            || CHR (10)
+            ||' P_CLNT_SEQ='
+            || V_CLNT_SEQ
+            || SQLERRM
+            || 'TRACE: '
+            || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+        KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RVRSE_RCVRY',P_MSG_RCVRY_ADJ);
+        
         RETURN;
 END;
