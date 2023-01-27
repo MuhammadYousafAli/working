@@ -32,6 +32,7 @@ AS
     V_JV_HDR_SEQ_REV           NUMBER;
     V_RCVRY_TRX_SEQ_RVSL       NUMBER;
     V_JV_HDR_SEQ_RESL          NUMBER;
+    V_INCIDENT_STS             VARCHAR2(40);
 
     -----------------  CURSOR TO GET INCDNT SETUP INFORMATION -----------------
     CURSOR CR_STP_INCDNT (P_INCDNT_TYP        NUMBER,
@@ -286,7 +287,7 @@ BEGIN
             THEN
                 ROLLBACK;
                 P_INCDNT_RTN_MSG :=
-                       'PRC_INCDNT_PROCESS ==> ERROR IN RECOVERY REVERSAL => LINE NO: '
+                       'PRC_INCDNT_PROCESS ==> ERROR IN GETTING VALUES FROM MW_STP_INCDNT => LINE NO: '
                     || $$PLSQL_LINE
                     || CHR (10)
                     || ' ERROR CODE: '
@@ -487,322 +488,443 @@ BEGIN
         END IF;
                
     ELSE   -----------  FOR INCIDENT REVERSAL ----------
-        ----------REVERSE EXCESS IF ANY ------------
-        FOR RVSL_EX
-            IN (  SELECT RCH.RCVRY_TRX_SEQ
-                    FROM MW_RCVRY_TRX RCH
-                         JOIN MW_RCVRY_DTL RCD
-                             ON     RCD.RCVRY_TRX_SEQ = RCH.RCVRY_TRX_SEQ
-                                AND RCD.CRNT_REC_FLG = 1
-                   WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                         AND RCH.CHNG_RSN_CMNT LIKE
-                                 ('%EXCESS CREATED DUE TO INCIDENT PROCESS DATED:%')
-                         AND RCH.CRNT_REC_FLG = 1
-                GROUP BY RCH.RCVRY_TRX_SEQ
-                ORDER BY 1 DESC)
-        LOOP
-            UPDATE MW_RCVRY_TRX RCH
-               SET RCH.CRNT_REC_FLG = 0,
-                   RCH.DEL_FLG = 1,
-                   RCH.LAST_UPD_BY = P_INCDNT_USER,
-                   RCH.LAST_UPD_DT = SYSDATE
-             WHERE     RCH.RCVRY_TRX_SEQ = RVSL_EX.RCVRY_TRX_SEQ
-                   AND RCH.PYMT_REF = P_CLNT_SEQ
-                   AND RCH.CRNT_REC_FLG = 1;
-
-            UPDATE MW_RCVRY_DTL RCD
-               SET RCD.CRNT_REC_FLG = 0,
-                   RCD.DEL_FLG = 1,
-                   RCD.LAST_UPD_BY = P_INCDNT_USER,
-                   RCD.LAST_UPD_DT = SYSDATE
-             WHERE     RCD.RCVRY_TRX_SEQ = RVSL_EX.RCVRY_TRX_SEQ
-                   AND RCD.CRNT_REC_FLG = 1;
-
-            SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_REV FROM DUAL;
-
-            INSERT INTO MW_JV_HDR (JV_HDR_SEQ,
-                                   PRNT_VCHR_REF,
-                                   JV_ID,
-                                   JV_DT,
-                                   JV_DSCR,
-                                   JV_TYP_KEY,
-                                   ENTY_SEQ,
-                                   ENTY_TYP,
-                                   CRTD_BY,
-                                   POST_FLG,
-                                   RCVRY_TRX_SEQ,
-                                   BRNCH_SEQ,
-                                   CLNT_SEQ,
-                                   INSTR_NUM,
-                                   TRNS_DT,
-                                   PYMT_MODE,
-                                   TOT_DBT,
-                                   TOT_CRDT,
-                                   ERP_INTEGRATION_FLG,
-                                   ERP_INTEGRATION_DT)
-                SELECT V_JV_HDR_SEQ_REV,
-                       JV_HDR_SEQ,
-                       V_JV_HDR_SEQ_REV,
-                       TO_DATE (SYSDATE),
-                       'REVERSAL OF ' || JV_DSCR,
-                       JV_TYP_KEY,
-                       ENTY_SEQ,
-                       ENTY_TYP,
-                       P_INCDNT_USER,
-                       POST_FLG,
-                       RCVRY_TRX_SEQ,
-                       BRNCH_SEQ,
-                       CLNT_SEQ,
-                       INSTR_NUM,
-                       SYSDATE,
-                       PYMT_MODE,
-                       TOT_DBT,
-                       TOT_CRDT,
-                       0,
-                       NULL
-                  FROM MW_JV_HDR JVH
-                 WHERE JVH.ENTY_SEQ = RVSL_EX.RCVRY_TRX_SEQ;
-
-            INSERT INTO MW_JV_DTL (JV_DTL_SEQ,
-                                   JV_HDR_SEQ,
-                                   CRDT_DBT_FLG,
-                                   AMT,
-                                   GL_ACCT_NUM,
-                                   DSCR,
-                                   LN_ITM_NUM)
-                SELECT JV_DTL_SEQ.NEXTVAL,
-                       V_JV_HDR_SEQ_REV,
-                       CASE WHEN CRDT_DBT_FLG = 0 THEN 1 ELSE 0 END,
-                       AMT,
-                       GL_ACCT_NUM,
-                       CASE
-                           WHEN DSCR = 'Credit' THEN 'Debit'
-                           ELSE 'Credit'
-                       END,
-                       LN_ITM_NUM
-                  FROM MW_JV_DTL JVD
-                 WHERE JVD.JV_HDR_SEQ IN
-                           (SELECT MAX (JV_HDR_SEQ)
-                              FROM MW_JV_HDR JVH
-                             WHERE     JVH.ENTY_SEQ = RVSL_EX.RCVRY_TRX_SEQ
-                                   AND JVH.PRNT_VCHR_REF IS NOT NULL);
-        END LOOP;       ---------- END LOOP REVERSE EXCESS RECOVERY ----------
-
-        ---------- ENTER RECOVERY AGAIN IF ANY ------------
-        FOR RVSL_REC
-            IN (  SELECT RCH.RCVRY_TRX_SEQ
-                    FROM MW_RCVRY_TRX RCH
-                         JOIN MW_RCVRY_DTL RCD
-                             ON     RCD.RCVRY_TRX_SEQ = RCH.RCVRY_TRX_SEQ
-                                AND RCD.CRNT_REC_FLG = 0
-                   WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                         AND RCH.CHNG_RSN_CMNT LIKE
-                                 ('%REVERSE DUE TO INCIDENT PROCESS DATED:%')
-                         AND RCH.CRNT_REC_FLG = 0
-                GROUP BY RCH.RCVRY_TRX_SEQ
-                ORDER BY 1)
-        LOOP
-            SELECT RCVRY_TRX_SEQ.NEXTVAL INTO V_RCVRY_TRX_SEQ_RVSL FROM DUAL;
-
-            INSERT INTO MW_RCVRY_TRX (RCVRY_TRX_SEQ,
-                                      EFF_START_DT,
-                                      INSTR_NUM,
-                                      PYMT_DT,
-                                      PYMT_AMT,
-                                      RCVRY_TYP_SEQ,
-                                      PYMT_MOD_KEY,
-                                      PYMT_STS_KEY,
-                                      CRTD_BY,
-                                      CRTD_DT,
-                                      LAST_UPD_BY,
-                                      LAST_UPD_DT,
-                                      DEL_FLG,
-                                      EFF_END_DT,
-                                      CRNT_REC_FLG,
-                                      PYMT_REF,
-                                      POST_FLG,
-                                      CHNG_RSN_KEY,
-                                      CHNG_RSN_CMNT,
-                                      PRNT_RCVRY_REF,
-                                      DPST_SLP_DT,
-                                      PRNT_LOAN_APP_SEQ)
-                SELECT V_RCVRY_TRX_SEQ_RVSL,
-                       SYSDATE,
-                       INSTR_NUM,
-                       PYMT_DT,
-                       PYMT_AMT,
-                       RCVRY_TYP_SEQ,
-                       PYMT_MOD_KEY,
-                       PYMT_STS_KEY,
-                       P_INCDNT_USER,
-                       SYSDATE,
-                       P_INCDNT_USER,
-                       SYSDATE,
-                       0,
-                       NULL,
-                       1,
-                       PYMT_REF,
-                       POST_FLG,
-                       CHNG_RSN_KEY,
-                       NULL,
-                       PRNT_RCVRY_REF,
-                       DPST_SLP_DT,
-                       PRNT_LOAN_APP_SEQ
-                  FROM MW_RCVRY_TRX RCH
-                 WHERE     RCH.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
-                       AND RCH.CRNT_REC_FLG = 0;
-
-            INSERT INTO MW_RCVRY_DTL (RCVRY_CHRG_SEQ,
-                                      EFF_START_DT,
-                                      RCVRY_TRX_SEQ,
-                                      CHRG_TYP_KEY,
-                                      PYMT_AMT,
-                                      CRTD_BY,
-                                      CRTD_DT,
-                                      LAST_UPD_BY,
-                                      LAST_UPD_DT,
-                                      DEL_FLG,
-                                      EFF_END_DT,
-                                      CRNT_REC_FLG,
-                                      PYMT_SCHED_DTL_SEQ,
-                                      ETL_FLAG)
-                SELECT RCVRY_CHRG_SEQ.NEXTVAL,
-                       SYSDATE,
-                       V_RCVRY_TRX_SEQ_RVSL,
-                       CHRG_TYP_KEY,
-                       PYMT_AMT,
-                       P_INCDNT_USER,
-                       SYSDATE,
-                       P_INCDNT_USER,
-                       SYSDATE,
-                       0,
-                       NULL,
-                       1,
-                       PYMT_SCHED_DTL_SEQ,
-                       NULL
-                  FROM MW_RCVRY_DTL RCD
-                 WHERE     RCD.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
-                       AND RCD.CRNT_REC_FLG = 0;
-
-
-
-            SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_RESL FROM DUAL;
-
-            INSERT INTO MW_JV_HDR (JV_HDR_SEQ,
-                                   PRNT_VCHR_REF,
-                                   JV_ID,
-                                   JV_DT,
-                                   JV_DSCR,
-                                   JV_TYP_KEY,
-                                   ENTY_SEQ,
-                                   ENTY_TYP,
-                                   CRTD_BY,
-                                   POST_FLG,
-                                   RCVRY_TRX_SEQ,
-                                   BRNCH_SEQ,
-                                   CLNT_SEQ,
-                                   INSTR_NUM,
-                                   TRNS_DT,
-                                   PYMT_MODE,
-                                   TOT_DBT,
-                                   TOT_CRDT,
-                                   ERP_INTEGRATION_FLG,
-                                   ERP_INTEGRATION_DT)
-                SELECT V_JV_HDR_SEQ_RESL,
-                       NULL,
-                       V_JV_HDR_SEQ_RESL,
-                       JV_DT,
-                       JV_DSCR,
-                       JV_TYP_KEY,
-                       ENTY_SEQ,
-                       ENTY_TYP,
-                       P_INCDNT_USER,
-                       POST_FLG,
-                       RCVRY_TRX_SEQ,
-                       BRNCH_SEQ,
-                       CLNT_SEQ,
-                       INSTR_NUM,
-                       SYSDATE,
-                       PYMT_MODE,
-                       TOT_DBT,
-                       TOT_CRDT,
-                       0,
-                       NULL
-                  FROM MW_JV_HDR JVH
-                 WHERE     JVH.ENTY_SEQ = RVSL_REC.RCVRY_TRX_SEQ
-                       AND JVH.PRNT_VCHR_REF IS NULL;
-
-            INSERT INTO MW_JV_DTL (JV_DTL_SEQ,
-                                   JV_HDR_SEQ,
-                                   CRDT_DBT_FLG,
-                                   AMT,
-                                   GL_ACCT_NUM,
-                                   DSCR,
-                                   LN_ITM_NUM)
-                SELECT JV_DTL_SEQ.NEXTVAL,
-                       V_JV_HDR_SEQ_RESL,
-                       CRDT_DBT_FLG,
-                       AMT,
-                       GL_ACCT_NUM,
-                       DSCR,
-                       LN_ITM_NUM
-                  FROM MW_JV_DTL JVD
-                 WHERE JVD.JV_HDR_SEQ IN
-                           (SELECT MAX (JV_HDR_SEQ)
-                              FROM MW_JV_HDR JVH
-                             WHERE     JVH.ENTY_SEQ = RVSL_REC.RCVRY_TRX_SEQ
-                                   AND JVH.PRNT_VCHR_REF IS NULL);
-
-            UPDATE MW_PYMT_SCHED_DTL PSD
-               SET PSD.PYMT_STS_KEY = 947,
-                   PSD.LAST_UPD_BY = P_INCDNT_USER,
-                   PSD.LAST_UPD_DT = SYSDATE
-             WHERE PSD.PYMT_SCHED_DTL_SEQ IN
-                       (  SELECT RCD.PYMT_SCHED_DTL_SEQ
-                            FROM MW_RCVRY_DTL RCD
-                           WHERE     RCD.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
-                                 AND RCD.CRNT_REC_FLG = 0
-                        GROUP BY RCD.PYMT_SCHED_DTL_SEQ);
-        END LOOP;
-
-        -------------  REVERSE TAG LIST AND DEATH -----------------------
-
-        UPDATE MW_CLNT_TAG_LIST TG
-           SET TG.CRNT_REC_FLG = 0,
-               TG.DEL_FLG = 0,
-               TG.LAST_UPD_BY = P_INCDNT_USER,
-               TG.LAST_UPD_DT = SYSDATE
-         WHERE TG.CNIC_NUM = V_CNIC_NUM AND TG.TAGS_SEQ = 5;
-
-        UPDATE MW_INCDNT_RPT RPT
-           SET RPT.CRNT_REC_FLG = 0,
-               RPT.DEL_FLG = 1,
-               RPT.LAST_UPD_BY = P_INCDNT_USER,
-               RPT.LAST_UPD_DT = SYSDATE
-         WHERE     RPT.CLNT_SEQ = P_CLNT_SEQ
-               AND RPT.INCDNT_STS =
-                   (SELECT VL.REF_CD_SEQ
-                      FROM MW_REF_CD_VAL  VL
-                           JOIN MW_REF_CD_GRP GRP
-                               ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
-                                  AND GRP.CRNT_REC_FLG = 1
-                     WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
-               AND RPT.CRNT_REC_FLG = 1;
-               
-        IF P_INCDNT_REF <> 0
+        BEGIN
+            SELECT VL.REF_CD_DSCR
+              INTO V_INCIDENT_STS
+              FROM MW_INCDNT_RPT  INC
+                   JOIN MW_REF_CD_VAL VL
+                       ON VL.REF_CD_SEQ = INC.INCDNT_STS AND VL.CRNT_REC_FLG = 1
+                   JOIN MW_REF_CD_GRP GRP
+                       ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                          AND GRP.CRNT_REC_FLG = 1
+                          AND GRP.REF_CD_GRP = '0425'
+             WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
+                   AND INC.DT_OF_INCDNT = V_INCDNT_DT
+                   AND INC.CRNT_REC_FLG = 1;
+        EXCEPTION WHEN OTHERS
         THEN
-            
-            UPDATE MW_ANML_RGSTR RG
-                SET RG.ANML_STS = -1,
-                RG.LAST_UPD_BY = P_INCDNT_USER,
-                RG.LAST_UPD_DT = SYSDATE
-               WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
-            
-        END IF;
+            NULL;
+        END;
+        
+        IF V_INCIDENT_STS = 'INCIDENT REPORTED'
+        THEN
+    
+            ----------REVERSE EXCESS IF ANY ------------
+            FOR RVSL_EX
+                IN (  SELECT RCH.RCVRY_TRX_SEQ
+                        FROM MW_RCVRY_TRX RCH
+                             JOIN MW_RCVRY_DTL RCD
+                                 ON     RCD.RCVRY_TRX_SEQ = RCH.RCVRY_TRX_SEQ
+                                    AND RCD.CRNT_REC_FLG = 1
+                       WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                             AND RCH.CHNG_RSN_CMNT LIKE
+                                     ('%EXCESS CREATED DUE TO INCIDENT PROCESS DATED:%')
+                             AND RCH.CRNT_REC_FLG = 1
+                    GROUP BY RCH.RCVRY_TRX_SEQ
+                    ORDER BY 1 DESC)
+            LOOP
+                UPDATE MW_RCVRY_TRX RCH
+                   SET RCH.CRNT_REC_FLG = 0,
+                       RCH.DEL_FLG = 1,
+                       RCH.LAST_UPD_BY = P_INCDNT_USER,
+                       RCH.LAST_UPD_DT = SYSDATE
+                 WHERE     RCH.RCVRY_TRX_SEQ = RVSL_EX.RCVRY_TRX_SEQ
+                       AND RCH.PYMT_REF = P_CLNT_SEQ
+                       AND RCH.CRNT_REC_FLG = 1;
 
+                UPDATE MW_RCVRY_DTL RCD
+                   SET RCD.CRNT_REC_FLG = 0,
+                       RCD.DEL_FLG = 1,
+                       RCD.LAST_UPD_BY = P_INCDNT_USER,
+                       RCD.LAST_UPD_DT = SYSDATE
+                 WHERE     RCD.RCVRY_TRX_SEQ = RVSL_EX.RCVRY_TRX_SEQ
+                       AND RCD.CRNT_REC_FLG = 1;
+
+                SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_REV FROM DUAL;
+
+                INSERT INTO MW_JV_HDR (JV_HDR_SEQ,
+                                       PRNT_VCHR_REF,
+                                       JV_ID,
+                                       JV_DT,
+                                       JV_DSCR,
+                                       JV_TYP_KEY,
+                                       ENTY_SEQ,
+                                       ENTY_TYP,
+                                       CRTD_BY,
+                                       POST_FLG,
+                                       RCVRY_TRX_SEQ,
+                                       BRNCH_SEQ,
+                                       CLNT_SEQ,
+                                       INSTR_NUM,
+                                       TRNS_DT,
+                                       PYMT_MODE,
+                                       TOT_DBT,
+                                       TOT_CRDT,
+                                       ERP_INTEGRATION_FLG,
+                                       ERP_INTEGRATION_DT)
+                    SELECT V_JV_HDR_SEQ_REV,
+                           JV_HDR_SEQ,
+                           V_JV_HDR_SEQ_REV,
+                           TO_DATE (SYSDATE),
+                           'REVERSAL OF ' || JV_DSCR,
+                           JV_TYP_KEY,
+                           ENTY_SEQ,
+                           ENTY_TYP,
+                           P_INCDNT_USER,
+                           POST_FLG,
+                           RCVRY_TRX_SEQ,
+                           BRNCH_SEQ,
+                           CLNT_SEQ,
+                           INSTR_NUM,
+                           SYSDATE,
+                           PYMT_MODE,
+                           TOT_DBT,
+                           TOT_CRDT,
+                           0,
+                           NULL
+                      FROM MW_JV_HDR JVH
+                     WHERE JVH.ENTY_SEQ = RVSL_EX.RCVRY_TRX_SEQ;
+
+                INSERT INTO MW_JV_DTL (JV_DTL_SEQ,
+                                       JV_HDR_SEQ,
+                                       CRDT_DBT_FLG,
+                                       AMT,
+                                       GL_ACCT_NUM,
+                                       DSCR,
+                                       LN_ITM_NUM)
+                    SELECT JV_DTL_SEQ.NEXTVAL,
+                           V_JV_HDR_SEQ_REV,
+                           CASE WHEN CRDT_DBT_FLG = 0 THEN 1 ELSE 0 END,
+                           AMT,
+                           GL_ACCT_NUM,
+                           CASE
+                               WHEN DSCR = 'Credit' THEN 'Debit'
+                               ELSE 'Credit'
+                           END,
+                           LN_ITM_NUM
+                      FROM MW_JV_DTL JVD
+                     WHERE JVD.JV_HDR_SEQ IN
+                               (SELECT MAX (JV_HDR_SEQ)
+                                  FROM MW_JV_HDR JVH
+                                 WHERE     JVH.ENTY_SEQ = RVSL_EX.RCVRY_TRX_SEQ
+                                       AND JVH.PRNT_VCHR_REF IS NOT NULL);
+                END LOOP;       ---------- END LOOP REVERSE EXCESS RECOVERY ----------
+
+                ---------- ENTER RECOVERY AGAIN IF ANY ------------
+                FOR RVSL_REC
+                    IN (  SELECT RCH.RCVRY_TRX_SEQ
+                            FROM MW_RCVRY_TRX RCH
+                                 JOIN MW_RCVRY_DTL RCD
+                                     ON     RCD.RCVRY_TRX_SEQ = RCH.RCVRY_TRX_SEQ
+                                        AND RCD.CRNT_REC_FLG = 0
+                           WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                                 AND RCH.CHNG_RSN_CMNT LIKE
+                                         ('%REVERSE DUE TO INCIDENT PROCESS DATED:%')
+                                 AND RCH.CRNT_REC_FLG = 0
+                        GROUP BY RCH.RCVRY_TRX_SEQ
+                        ORDER BY 1)
+                LOOP
+                    SELECT RCVRY_TRX_SEQ.NEXTVAL INTO V_RCVRY_TRX_SEQ_RVSL FROM DUAL;
+
+                    INSERT INTO MW_RCVRY_TRX (RCVRY_TRX_SEQ,
+                                              EFF_START_DT,
+                                              INSTR_NUM,
+                                              PYMT_DT,
+                                              PYMT_AMT,
+                                              RCVRY_TYP_SEQ,
+                                              PYMT_MOD_KEY,
+                                              PYMT_STS_KEY,
+                                              CRTD_BY,
+                                              CRTD_DT,
+                                              LAST_UPD_BY,
+                                              LAST_UPD_DT,
+                                              DEL_FLG,
+                                              EFF_END_DT,
+                                              CRNT_REC_FLG,
+                                              PYMT_REF,
+                                              POST_FLG,
+                                              CHNG_RSN_KEY,
+                                              CHNG_RSN_CMNT,
+                                              PRNT_RCVRY_REF,
+                                              DPST_SLP_DT,
+                                              PRNT_LOAN_APP_SEQ)
+                        SELECT V_RCVRY_TRX_SEQ_RVSL,
+                               SYSDATE,
+                               INSTR_NUM,
+                               PYMT_DT,
+                               PYMT_AMT,
+                               RCVRY_TYP_SEQ,
+                               PYMT_MOD_KEY,
+                               PYMT_STS_KEY,
+                               P_INCDNT_USER,
+                               SYSDATE,
+                               P_INCDNT_USER,
+                               SYSDATE,
+                               0,
+                               NULL,
+                               1,
+                               PYMT_REF,
+                               POST_FLG,
+                               CHNG_RSN_KEY,
+                               NULL,
+                               PRNT_RCVRY_REF,
+                               DPST_SLP_DT,
+                               PRNT_LOAN_APP_SEQ
+                          FROM MW_RCVRY_TRX RCH
+                         WHERE     RCH.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
+                               AND RCH.CRNT_REC_FLG = 0;
+
+                    INSERT INTO MW_RCVRY_DTL (RCVRY_CHRG_SEQ,
+                                              EFF_START_DT,
+                                              RCVRY_TRX_SEQ,
+                                              CHRG_TYP_KEY,
+                                              PYMT_AMT,
+                                              CRTD_BY,
+                                              CRTD_DT,
+                                              LAST_UPD_BY,
+                                              LAST_UPD_DT,
+                                              DEL_FLG,
+                                              EFF_END_DT,
+                                              CRNT_REC_FLG,
+                                              PYMT_SCHED_DTL_SEQ,
+                                              ETL_FLAG)
+                        SELECT RCVRY_CHRG_SEQ.NEXTVAL,
+                               SYSDATE,
+                               V_RCVRY_TRX_SEQ_RVSL,
+                               CHRG_TYP_KEY,
+                               PYMT_AMT,
+                               P_INCDNT_USER,
+                               SYSDATE,
+                               P_INCDNT_USER,
+                               SYSDATE,
+                               0,
+                               NULL,
+                               1,
+                               PYMT_SCHED_DTL_SEQ,
+                               NULL
+                          FROM MW_RCVRY_DTL RCD
+                         WHERE     RCD.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
+                               AND RCD.CRNT_REC_FLG = 0;
+
+
+
+                    SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_RESL FROM DUAL;
+
+                    INSERT INTO MW_JV_HDR (JV_HDR_SEQ,
+                                           PRNT_VCHR_REF,
+                                           JV_ID,
+                                           JV_DT,
+                                           JV_DSCR,
+                                           JV_TYP_KEY,
+                                           ENTY_SEQ,
+                                           ENTY_TYP,
+                                           CRTD_BY,
+                                           POST_FLG,
+                                           RCVRY_TRX_SEQ,
+                                           BRNCH_SEQ,
+                                           CLNT_SEQ,
+                                           INSTR_NUM,
+                                           TRNS_DT,
+                                           PYMT_MODE,
+                                           TOT_DBT,
+                                           TOT_CRDT,
+                                           ERP_INTEGRATION_FLG,
+                                           ERP_INTEGRATION_DT)
+                        SELECT V_JV_HDR_SEQ_RESL,
+                               NULL,
+                               V_JV_HDR_SEQ_RESL,
+                               JV_DT,
+                               JV_DSCR,
+                               JV_TYP_KEY,
+                               ENTY_SEQ,
+                               ENTY_TYP,
+                               P_INCDNT_USER,
+                               POST_FLG,
+                               RCVRY_TRX_SEQ,
+                               BRNCH_SEQ,
+                               CLNT_SEQ,
+                               INSTR_NUM,
+                               SYSDATE,
+                               PYMT_MODE,
+                               TOT_DBT,
+                               TOT_CRDT,
+                               0,
+                               NULL
+                          FROM MW_JV_HDR JVH
+                         WHERE     JVH.ENTY_SEQ = RVSL_REC.RCVRY_TRX_SEQ
+                               AND JVH.PRNT_VCHR_REF IS NULL;
+
+                    INSERT INTO MW_JV_DTL (JV_DTL_SEQ,
+                                           JV_HDR_SEQ,
+                                           CRDT_DBT_FLG,
+                                           AMT,
+                                           GL_ACCT_NUM,
+                                           DSCR,
+                                           LN_ITM_NUM)
+                        SELECT JV_DTL_SEQ.NEXTVAL,
+                               V_JV_HDR_SEQ_RESL,
+                               CRDT_DBT_FLG,
+                               AMT,
+                               GL_ACCT_NUM,
+                               DSCR,
+                               LN_ITM_NUM
+                          FROM MW_JV_DTL JVD
+                         WHERE JVD.JV_HDR_SEQ IN
+                                   (SELECT MAX (JV_HDR_SEQ)
+                                      FROM MW_JV_HDR JVH
+                                     WHERE     JVH.ENTY_SEQ = RVSL_REC.RCVRY_TRX_SEQ
+                                           AND JVH.PRNT_VCHR_REF IS NULL);
+
+                    UPDATE MW_PYMT_SCHED_DTL PSD
+                       SET PSD.PYMT_STS_KEY = 947,
+                           PSD.LAST_UPD_BY = P_INCDNT_USER,
+                           PSD.LAST_UPD_DT = SYSDATE
+                     WHERE PSD.PYMT_SCHED_DTL_SEQ IN
+                               (  SELECT RCD.PYMT_SCHED_DTL_SEQ
+                                    FROM MW_RCVRY_DTL RCD
+                                   WHERE     RCD.RCVRY_TRX_SEQ = RVSL_REC.RCVRY_TRX_SEQ
+                                         AND RCD.CRNT_REC_FLG = 0
+                                GROUP BY RCD.PYMT_SCHED_DTL_SEQ);
+                END LOOP;
+
+                -------------  REVERSE TAG LIST AND DEATH -----------------------
+
+                UPDATE MW_CLNT_TAG_LIST TG
+                   SET TG.CRNT_REC_FLG = 0,
+                       TG.DEL_FLG = 0,
+                       TG.LAST_UPD_BY = P_INCDNT_USER,
+                       TG.LAST_UPD_DT = SYSDATE
+                 WHERE TG.CNIC_NUM = V_CNIC_NUM AND TG.TAGS_SEQ = 5;
+
+                UPDATE MW_INCDNT_RPT RPT
+                   SET RPT.CRNT_REC_FLG = 0,
+                       RPT.DEL_FLG = 1,
+                       RPT.LAST_UPD_BY = P_INCDNT_USER,
+                       RPT.LAST_UPD_DT = SYSDATE
+                 WHERE     RPT.CLNT_SEQ = P_CLNT_SEQ
+                       AND RPT.INCDNT_STS =
+                           (SELECT VL.REF_CD_SEQ
+                              FROM MW_REF_CD_VAL  VL
+                                   JOIN MW_REF_CD_GRP GRP
+                                       ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                                          AND GRP.CRNT_REC_FLG = 1
+                             WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
+                       AND RPT.CRNT_REC_FLG = 1;
+                       
+                IF P_INCDNT_REF <> 0
+                THEN
+                    
+                    UPDATE MW_ANML_RGSTR RG
+                        SET RG.ANML_STS = -1,
+                        RG.LAST_UPD_BY = P_INCDNT_USER,
+                        RG.LAST_UPD_DT = SYSDATE
+                       WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
+                    
+                END IF;
+            
+        ELSIF V_INCIDENT_STS = 'FUNERAL SAVED'
+        THEN 
+    
+            UPDATE MW_EXP EX
+                SET EX.DEL_FLG = 1,
+                EX.LAST_UPD_BY = P_INCDNT_USER,
+                EX.LAST_UPD_DT = SYSDATE
+              WHERE (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = P_INCDNT_REF)
+              AND EX.EXPNS_TYP_SEQ = 424
+              AND EX.POST_FLG = 0
+              AND EX.DEL_FLG = 0; 
+            
+            UPDATE MW_PYMT_SCHED_DTL PSD
+               SET PSD.PYMT_STS_KEY = 947
+             WHERE PSD.CRNT_REC_FLG = 1
+             AND PSD.PYMT_SCHED_DTL_SEQ IN (
+             SELECT RCD.PYMT_SCHED_DTL_SEQ
+                FROM MW_RCVRY_DTL RCD
+                 WHERE RCD.RCVRY_TRX_SEQ =
+                       (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                          FROM MW_RCVRY_TRX RCH
+                         WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                               AND RCH.POST_FLG = 1
+                               AND RCH.PYMT_STS_KEY = 1001
+                               AND RCH.CRNT_REC_FLG = 1)
+             );  
+             
+            UPDATE MW_RCVRY_DTL RCD
+                    SET RCD.CRNT_REC_FLG  = 0,
+                    RCD.DEL_FLG = 1,
+                    RCD.LAST_UPD_BY = P_INCDNT_USER,
+                   RCD.LAST_UPD_DT = SYSDATE
+                 WHERE RCD.RCVRY_TRX_SEQ =
+                       (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                          FROM MW_RCVRY_TRX RCH
+                         WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                               AND RCH.POST_FLG = 1
+                               AND RCH.PYMT_STS_KEY = 1001
+                               AND RCH.CRNT_REC_FLG = 1);          
+             
+            UPDATE MW_RCVRY_TRX RC
+               SET RC.CRNT_REC_FLG = 0,
+                   RC.DEL_FLG = 1,
+                   RC.LAST_UPD_BY = P_INCDNT_USER,
+                   RC.LAST_UPD_DT = SYSDATE
+             WHERE RC.RCVRY_TRX_SEQ =
+                   (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                      FROM MW_RCVRY_TRX RCH
+                     WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                           AND RCH.POST_FLG = 0
+                           AND RCH.PYMT_STS_KEY = 1001
+                           AND RCH.CRNT_REC_FLG = 1);
+            
+            UPDATE MW_INCDNT_RPT INC
+               SET INC.AMT = (NVL (V_INC_PRIMUM_AMT, 0) - NVL (V_DED_AMT_TOT, 0)),
+                   INC.INCDNT_STS =
+                       (SELECT VL.REF_CD_SEQ
+                          FROM MW_REF_CD_VAL  VL
+                               JOIN MW_REF_CD_GRP GRP
+                                   ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                                      AND GRP.CRNT_REC_FLG = 1
+                         WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001'),
+                   INC.LAST_UPD_DT = SYSDATE,
+                   INC.LAST_UPD_BY = P_INCDNT_USER
+             WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
+                   AND INC.CRNT_REC_FLG = 1
+                   AND INC.INCDNT_STS =
+                       (SELECT VL.REF_CD_SEQ
+                          FROM MW_REF_CD_VAL  VL
+                               JOIN MW_REF_CD_GRP GRP
+                                   ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                                      AND GRP.CRNT_REC_FLG = 1
+                         WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004');
+
+          
+        ELSIF V_INCIDENT_STS = 'FUNERAL PAID'
+        THEN 
+        
+            UPDATE MW_EXP EX
+                SET EX.POST_FLG = 0,
+                EX.LAST_UPD_BY = P_INCDNT_USER,
+                EX.LAST_UPD_DT = SYSDATE
+              WHERE (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = P_INCDNT_REF)
+              AND EX.EXPNS_TYP_SEQ = 424
+              AND EX.POST_FLG = 1
+              AND EX.DEL_FLG = 0; 
+                      
+            UPDATE MW_RCVRY_TRX RC
+               SET RC.POST_FLG = 0,
+                   RC.LAST_UPD_BY = P_INCDNT_USER,
+                   RC.LAST_UPD_DT = SYSDATE
+             WHERE RC.RCVRY_TRX_SEQ =
+                   (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                      FROM MW_RCVRY_TRX RCH
+                     WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                           AND RCH.POST_FLG = 1
+                           AND RCH.PYMT_STS_KEY = 1001
+                           AND RCH.CRNT_REC_FLG = 1);
+        END IF; ----  V_INCIDENT_STS
     END IF;
 
     P_INCDNT_RTN_MSG := 'SUCCESS';
+    
 EXCEPTION
     WHEN OTHERS
     THEN

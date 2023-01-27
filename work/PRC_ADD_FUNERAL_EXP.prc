@@ -165,6 +165,7 @@ BEGIN
                      P_PYMT_RCT_FLG,
                      0,
                      P_REMARKS);
+                     
         UPDATE MW_INCDNT_RPT INC
        SET INC.INCDNT_STS =
                (SELECT VL.REF_CD_SEQ

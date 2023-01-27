@@ -6,16 +6,18 @@ CREATE OR REPLACE PROCEDURE PRC_INCDNT_RCVRY_ADJSTMNT (
     P_MSG_RCVRY_ADJ   OUT VARCHAR2)
 AS
     V_ANML_FOUND           NUMBER;
+    V_VEHCLE_FOUND         NUMBER;
     V_CLNT_SEQ             NUMBER := P_CLNT_SEQ;
     V_AML_FOUND            VARCHAR2 (200);
     V_UNPOSTED_REC_FOUND   NUMBER := 0;
     V_UNPOSTED_EXP_FOUND   NUMBER := 0;
     V_BRNCH_SEQ            MW_BRNCH.BRNCH_SEQ%TYPE;
     V_CNIC_NUM             MW_CLNT.CNIC_NUM%TYPE;
+    V_RCVRY_TYP_SEQ        NUMBER := 301; ---- DEFAULT    
     P_MSG_RCVRY_OUT        VARCHAR2 (500);
 BEGIN
 
-    ------------  GET CLIENT INFO ------------
+    ------------  GET CLIENT INFO FROM ANIMAL REGISTRATION ------------
     BEGIN
         SELECT COUNT (1)
           INTO V_ANML_FOUND
@@ -31,17 +33,58 @@ BEGIN
                    JOIN MW_LOAN_APP AP
                        ON     AP.LOAN_APP_SEQ = RG.LOAN_APP_SEQ
                           AND AP.CRNT_REC_FLG = 1
-                          AND AP.LOAN_APP_STS = 703
-                 WHERE RG.ANML_RGSTR_SEQ = 299000030039405 AND RG.CRNT_REC_FLG = 1
+                          AND AP.LOAN_APP_STS IN (703,1305)
+                 WHERE RG.ANML_RGSTR_SEQ = P_CLNT_SEQ AND RG.CRNT_REC_FLG = 1
               ORDER BY 1 DESC
-            FETCH NEXT 1 ROWS ONLY;        
+            FETCH NEXT 1 ROWS ONLY; 
+            V_RCVRY_TYP_SEQ := 454;  --------  TO SET FOR CLAIM RECOVERY       
         END IF;
     EXCEPTION
     WHEN OTHERS
     THEN
         ROLLBACK;
         P_MSG_RCVRY_ADJ :=
-               'PRC_INCDNT_RCVRY_ADJSTMNT ==> ERROR IN GETTING CLNT ID => LINE NO: '
+               'PRC_INCDNT_RCVRY_ADJSTMNT ==> ERROR IN GETTING ANIMAL CLNT ID => LINE NO: '
+            || $$PLSQL_LINE
+            || CHR (10)
+            || ' ERROR CODE: '
+            || SQLCODE
+            || ' ERROR MESSAGE: '
+            || SQLERRM
+            || 'TRACE: '
+            || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+        KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RCVRY_ADJSTMNT', P_MSG_RCVRY_ADJ);
+        RETURN;
+    END;
+    
+    ------------  GET CLIENT INFO FROM VEHICLE REGISTRATION ------------
+    BEGIN
+        SELECT COUNT (1)
+          INTO V_VEHCLE_FOUND
+          FROM MW_VEHICLE_INFO V
+         WHERE V.VHCLE_SEQ = P_CLNT_SEQ
+            AND V.CRNT_REC_FLG = 1;
+
+        IF V_VEHCLE_FOUND <> 0
+        THEN
+            SELECT CLNT_SEQ
+                INTO V_CLNT_SEQ
+              FROM MW_VEHICLE_INFO RG
+                   JOIN MW_LOAN_APP AP
+                       ON     AP.LOAN_APP_SEQ = RG.LOAN_APP_SEQ
+                          AND AP.CRNT_REC_FLG = 1
+                          AND AP.LOAN_APP_STS IN (703,1305)
+                 WHERE RG.VHCLE_SEQ = P_CLNT_SEQ AND RG.CRNT_REC_FLG = 1
+              ORDER BY 1 DESC
+            FETCH NEXT 1 ROWS ONLY; 
+            V_RCVRY_TYP_SEQ := 453;  --------  TO SET FOR CLAIM RECOVERY       
+        END IF;
+    EXCEPTION
+    WHEN OTHERS
+    THEN
+        ROLLBACK;
+        P_MSG_RCVRY_ADJ :=
+               'PRC_INCDNT_RCVRY_ADJSTMNT ==> ERROR IN GETTING VEHICLE CLNT ID => LINE NO: '
             || $$PLSQL_LINE
             || CHR (10)
             || ' ERROR CODE: '
@@ -102,7 +145,7 @@ BEGIN
         RECOVERY.PRC_PST_LOAN_ASJSTMNT ('LOAN ADJUSTMENT',
                                          SYSDATE,
                                          P_ADJSTMNT_AMT,
-                                         301,
+                                         V_RCVRY_TYP_SEQ,
                                          V_CLNT_SEQ,
                                          P_USER_ID,
                                          V_BRNCH_SEQ,
