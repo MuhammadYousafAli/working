@@ -177,7 +177,13 @@ BEGIN
            INC.LAST_UPD_DT = SYSDATE,
            INC.LAST_UPD_BY = P_USER_ID
      WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
-           AND INC.DT_OF_INCDNT = V_INCDNT_DT
+           AND INC.INCDNT_STS =
+               (SELECT VL.REF_CD_SEQ
+                  FROM MW_REF_CD_VAL  VL
+                       JOIN MW_REF_CD_GRP GRP
+                           ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                              AND GRP.CRNT_REC_FLG = 1
+                 WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
            AND INC.CRNT_REC_FLG = 1;
 
         P_RTN_MSG := 'SUCCESS';
@@ -491,7 +497,13 @@ BEGIN
            INC.LAST_UPD_DT = SYSDATE,
            INC.LAST_UPD_BY = P_USER_ID
      WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
-           AND INC.DT_OF_INCDNT = V_INCDNT_DT
+           AND INC.INCDNT_STS =
+               (SELECT VL.REF_CD_SEQ
+                  FROM MW_REF_CD_VAL  VL
+                       JOIN MW_REF_CD_GRP GRP
+                           ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                              AND GRP.CRNT_REC_FLG = 1
+                 WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
            AND INC.CRNT_REC_FLG = 1;
 
     P_RTN_MSG := 'SUCCESS';

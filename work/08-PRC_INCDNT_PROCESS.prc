@@ -1,4 +1,4 @@
-/* Formatted on 30/01/2023 4:30:30 pm (QP5 v5.326) */
+/* Formatted on 03/02/2023 3:06:44 pm (QP5 v5.326) */
 CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_DT              VARCHAR2,
     P_CLNT_SEQ               NUMBER,
@@ -17,6 +17,7 @@ AS
     V_CLNT_TAG                 VARCHAR2 (100);
     V_OD_COUNT                 NUMBER;
     V_UNPOSTED_RECOVERY        NUMBER;
+    V_INCDNT_ENTRY_FOUND       NUMBER := 0;
     V_BRNCH_SEQ                MW_BRNCH.BRNCH_SEQ%TYPE;
     V_PRNT_LOAN_APP_SEQ        MW_LOAN_APP.PRNT_LOAN_APP_SEQ%TYPE;
     V_CNIC_NUM                 MW_CLNT.CNIC_NUM%TYPE;
@@ -130,6 +131,7 @@ BEGIN
 
     --V_INCDNT_DT := '01-JAN-2023';    ------------- P_INCDNT_DT ---------------
 
+
     ------------  CHECK FOR NACTA TAGGED -------------------------
     SELECT FN_FIND_CLNT_TAGGED ('AML', P_CLNT_SEQ, NULL)
       INTO V_CLNT_TAG
@@ -164,21 +166,7 @@ BEGIN
         P_INCDNT_RTN_MSG := 'FAILED: OD CHECK. Client has OD Amount';
         RETURN;
     END IF;
-
-    -----------  UNPOSTED RECOVERY CHECK --------
-    SELECT COUNT (1)
-      INTO V_UNPOSTED_RECOVERY
-      FROM MW_RCVRY_TRX RCH
-     WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-           AND RCH.POST_FLG = 0
-           AND RCH.CRNT_REC_FLG = 1;
-
-    IF V_UNPOSTED_RECOVERY > 0
-    THEN
-        P_INCDNT_RTN_MSG :=
-            'FAILED: UNPOSTED RECOVERY. Client has Unposted recovery';
-        RETURN;
-    END IF;
+    
 
     -------------------------------------------------------------------------
 
@@ -189,10 +177,47 @@ BEGIN
 
     IF P_INCDNT_RVRSE = 0                       ----------  FOR INCIDENT ENTRY
     THEN
-            SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
-              INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
-              FROM MW_LOAN_APP AP
-             WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
+        ------ CHECK IF INCDNT REPORTED ALREADY -----------
+        SELECT COUNT (1)
+          INTO V_INCDNT_ENTRY_FOUND
+          FROM MW_INCDNT_RPT INC
+         WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
+               AND INC.CRNT_REC_FLG = 1
+               AND INC.INCDNT_STS IN
+                       (SELECT VL.REF_CD_SEQ
+                          FROM MW_REF_CD_VAL  VL
+                               JOIN MW_REF_CD_GRP GRP
+                                   ON     GRP.REF_CD_GRP_SEQ =
+                                          VL.REF_CD_GRP_KEY
+                                      AND GRP.CRNT_REC_FLG = 1
+                         WHERE     GRP.REF_CD_GRP = '0425'
+                               AND VL.REF_CD != '0003');
+
+        IF V_INCDNT_ENTRY_FOUND > 0
+        THEN
+            P_INCDNT_RTN_MSG := 'FAILED: INCIDENT ENTRY IS IN PROCESS ALREADY....';
+            RETURN;
+        END IF;
+
+        -----------  UNPOSTED RECOVERY CHECK --------
+        SELECT COUNT (1)
+          INTO V_UNPOSTED_RECOVERY
+          FROM MW_RCVRY_TRX RCH
+         WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+               AND RCH.POST_FLG = 0
+               AND RCH.CRNT_REC_FLG = 1;
+
+        IF V_UNPOSTED_RECOVERY > 0
+        THEN
+            P_INCDNT_RTN_MSG :=
+                'FAILED: UNPOSTED RECOVERY. Client has Unposted recovery';
+            RETURN;
+        END IF;
+        
+        SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
+          INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
+          FROM MW_LOAN_APP AP
+         WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
                    AND AP.CRNT_REC_FLG = 1
                    AND AP.LOAN_APP_STS IN (703, 1305)
           ORDER BY 2 DESC
@@ -495,10 +520,11 @@ BEGIN
     ELSE                         -----------  FOR INCIDENT REVERSAL ----------
         BEGIN
             SELECT VL.REF_CD_DSCR
-                INTO V_INCIDENT_STS
+              INTO V_INCIDENT_STS
               FROM MW_INCDNT_RPT  INC
                    JOIN MW_REF_CD_VAL VL
-                       ON VL.REF_CD_SEQ = INC.INCDNT_STS AND VL.CRNT_REC_FLG = 1
+                       ON     VL.REF_CD_SEQ = INC.INCDNT_STS
+                          AND VL.CRNT_REC_FLG = 1
                    JOIN MW_REF_CD_GRP GRP
                        ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
                           AND GRP.CRNT_REC_FLG = 1
@@ -509,19 +535,50 @@ BEGIN
                           FROM MW_INCDNT_RPT INC1
                          WHERE     INC1.CLNT_SEQ = P_CLNT_SEQ
                                AND INC1.CRNT_REC_FLG = 1
-                               AND INC1.INCDNT_STS =
-                                   (SELECT VL.REF_CD_SEQ
-                                      FROM MW_REF_CD_VAL  VL
-                                           JOIN MW_REF_CD_GRP GRP
-                                               ON     GRP.REF_CD_GRP_SEQ =
-                                                      VL.REF_CD_GRP_KEY
-                                                  AND GRP.CRNT_REC_FLG = 1
-                                     WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001'))
+                               AND (   INC1.INCDNT_STS =
+                                       (SELECT VL.REF_CD_SEQ
+                                          FROM MW_REF_CD_VAL  VL
+                                               JOIN MW_REF_CD_GRP GRP
+                                                   ON     GRP.REF_CD_GRP_SEQ =
+                                                          VL.REF_CD_GRP_KEY
+                                                      AND GRP.CRNT_REC_FLG =
+                                                          1
+                                         WHERE     GRP.REF_CD_GRP = '0425'
+                                               AND VL.REF_CD = '0001')
+                                    OR INC1.INCDNT_STS =
+                                       (SELECT VL.REF_CD_SEQ
+                                          FROM MW_REF_CD_VAL  VL
+                                               JOIN MW_REF_CD_GRP GRP
+                                                   ON     GRP.REF_CD_GRP_SEQ =
+                                                          VL.REF_CD_GRP_KEY
+                                                      AND GRP.CRNT_REC_FLG =
+                                                          1
+                                         WHERE     GRP.REF_CD_GRP = '0425'
+                                               AND VL.REF_CD = '0004')
+                                    OR INC1.INCDNT_STS =
+                                       (SELECT VL.REF_CD_SEQ
+                                          FROM MW_REF_CD_VAL  VL
+                                               JOIN MW_REF_CD_GRP GRP
+                                                   ON     GRP.REF_CD_GRP_SEQ =
+                                                          VL.REF_CD_GRP_KEY
+                                                      AND GRP.CRNT_REC_FLG =
+                                                          1
+                                         WHERE     GRP.REF_CD_GRP = '0425'
+                                               AND VL.REF_CD = '0002')))
                    AND INC.CRNT_REC_FLG = 1;
         EXCEPTION
             WHEN OTHERS
             THEN
-                NULL;
+                ROLLBACK;
+                P_INCDNT_RTN_MSG :=
+                'ERROR PRC_INCDNT_PROCESS => ISSUE IN GETTING INCIDENT STATUSES FOR REVERSAL..'
+                || P_INCDNT_RTN_RCV_MSG
+                || SQLERRM;
+                KASHF_REPORTING.PRO_LOG_MSG (
+                'PRC_INCDNT_PROCESS',
+                P_INCDNT_RTN_MSG);
+            
+            RETURN;
         END;
 
         IF V_INCIDENT_STS = 'INCIDENT REPORTED'
@@ -636,12 +693,11 @@ BEGIN
                                  ON     RCD.RCVRY_TRX_SEQ = RCH.RCVRY_TRX_SEQ
                                     AND RCD.CRNT_REC_FLG = 0
                        WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                             AND RCH.CHNG_RSN_CMNT = (
-                                        SELECT MAX(RCH1.CHNG_RSN_CMNT)
-                                        FROM MW_RCVRY_TRX RCH1
-                                        WHERE RCH1.PYMT_REF = P_CLNT_SEQ
-                                        AND RCH1.CRNT_REC_FLG = 0
-                                        )
+                             AND RCH.CHNG_RSN_CMNT =
+                                 (SELECT MAX (RCH1.CHNG_RSN_CMNT)
+                                    FROM MW_RCVRY_TRX RCH1
+                                   WHERE     RCH1.PYMT_REF = P_CLNT_SEQ
+                                         AND RCH1.CRNT_REC_FLG = 0)
                              AND RCH.CRNT_REC_FLG = 0
                     GROUP BY RCH.RCVRY_TRX_SEQ
                     ORDER BY 1)
@@ -846,19 +902,21 @@ BEGIN
                        RG.LAST_UPD_DT = SYSDATE
                  WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
             END IF;
+            
         ELSIF V_INCIDENT_STS = 'FUNERAL SAVED'
         THEN
+            
             UPDATE MW_EXP EX
                SET EX.DEL_FLG = 1,
                    EX.LAST_UPD_BY = P_INCDNT_USER,
                    EX.LAST_UPD_DT = SYSDATE
-             WHERE     (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = P_INCDNT_REF)
-                   AND EX.EXPNS_TYP_SEQ = 424
+             WHERE  EX.EXP_REF = P_CLNT_SEQ
+                   AND EX.EXPNS_TYP_SEQ IN (424,423)
                    AND EX.POST_FLG = 0
                    AND EX.DEL_FLG = 0;
 
             UPDATE MW_PYMT_SCHED_DTL PSD
-               SET PSD.PYMT_STS_KEY = 947
+               SET PSD.PYMT_STS_KEY = 945
              WHERE     PSD.CRNT_REC_FLG = 1
                    AND PSD.PYMT_SCHED_DTL_SEQ IN
                            (SELECT RCD.PYMT_SCHED_DTL_SEQ
@@ -897,8 +955,8 @@ BEGIN
                            AND RCH.PYMT_STS_KEY = 1001
                            AND RCH.CRNT_REC_FLG = 1);
 
-            UPDATE MW_INCDNT_RPT INC               
-                 SET  INC.INCDNT_STS =
+            UPDATE MW_INCDNT_RPT INC
+               SET INC.INCDNT_STS =
                        (SELECT VL.REF_CD_SEQ
                           FROM MW_REF_CD_VAL  VL
                                JOIN MW_REF_CD_GRP GRP
@@ -918,7 +976,7 @@ BEGIN
                                           VL.REF_CD_GRP_KEY
                                       AND GRP.CRNT_REC_FLG = 1
                          WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004');
-        ELSIF V_INCIDENT_STS = 'FUNERAL PAID'
+        ELSIF V_INCIDENT_STS IN ('FUNERAL PAID')
         THEN
             SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_FUN FROM DUAL;
 
@@ -998,12 +1056,11 @@ BEGIN
                                                    AND EX.DEL_FLG = 0));
 
             UPDATE MW_EXP EX
-               SET EX.POST_FLG = 0,
+               SET EX.DEL_FLG = 1,
                    EX.LAST_UPD_BY = P_INCDNT_USER,
                    EX.LAST_UPD_DT = SYSDATE
              WHERE     (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = P_INCDNT_REF)
                    AND EX.EXPNS_TYP_SEQ IN (424, 423)
-                   AND EX.POST_FLG = 1
                    AND EX.DEL_FLG = 0;
 
             SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_REC FROM DUAL;
@@ -1080,16 +1137,45 @@ BEGIN
                                                        1001
                                                    AND RCH.CRNT_REC_FLG = 1));
 
+            UPDATE MW_PYMT_SCHED_DTL PSD
+               SET PSD.PYMT_STS_KEY = 945,
+                   PSD.LAST_UPD_BY = P_INCDNT_USER,
+                   PSD.LAST_UPD_DT = SYSDATE
+             WHERE     PSD.CRNT_REC_FLG = 1
+                   AND PSD.PYMT_SCHED_DTL_SEQ IN
+                           (SELECT RCD.PYMT_SCHED_DTL_SEQ
+                              FROM MW_RCVRY_DTL RCD
+                             WHERE RCD.RCVRY_TRX_SEQ =
+                                   (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                                      FROM MW_RCVRY_TRX RCH
+                                     WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                                           AND RCH.POST_FLG = 1
+                                           AND RCH.PYMT_STS_KEY = 1001
+                                           AND RCH.CRNT_REC_FLG = 1));
+
+            UPDATE MW_RCVRY_DTL RCD
+               SET RCD.CRNT_REC_FLG = 0,
+                   RCD.DEL_FLG = 1,
+                   RCD.LAST_UPD_BY = P_INCDNT_USER,
+                   RCD.LAST_UPD_DT = SYSDATE
+             WHERE RCD.RCVRY_TRX_SEQ =
+                   (SELECT MAX (RCH.RCVRY_TRX_SEQ)
+                      FROM MW_RCVRY_TRX RCH
+                     WHERE     RCH.PYMT_REF = P_CLNT_SEQ
+                           AND RCH.POST_FLG = 1
+                           AND RCH.PYMT_STS_KEY = 1001
+                           AND RCH.CRNT_REC_FLG = 1);
 
             UPDATE MW_RCVRY_TRX RC
-               SET RC.POST_FLG = 0,
+               SET RC.CRNT_REC_FLG = 0,
+                   RC.DEL_FLG = 1,
                    RC.LAST_UPD_BY = P_INCDNT_USER,
                    RC.LAST_UPD_DT = SYSDATE
              WHERE RC.RCVRY_TRX_SEQ =
                    (SELECT MAX (RCH.RCVRY_TRX_SEQ)
                       FROM MW_RCVRY_TRX RCH
                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                           AND RCH.POST_FLG = 1
+                           AND RCH.POST_FLG = 0
                            AND RCH.PYMT_STS_KEY = 1001
                            AND RCH.CRNT_REC_FLG = 1);
 
@@ -1101,22 +1187,31 @@ BEGIN
                                    ON     GRP.REF_CD_GRP_SEQ =
                                           VL.REF_CD_GRP_KEY
                                       AND GRP.CRNT_REC_FLG = 1
-                         WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004'),
+                         WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001'),
                    INC.LAST_UPD_DT = SYSDATE,
                    INC.LAST_UPD_BY = P_INCDNT_USER
              WHERE     INC.CLNT_SEQ = P_CLNT_SEQ
                    AND INC.CRNT_REC_FLG = 1
-                   AND INC.INCDNT_STS =
-                       (SELECT VL.REF_CD_SEQ
-                          FROM MW_REF_CD_VAL  VL
-                               JOIN MW_REF_CD_GRP GRP
-                                   ON     GRP.REF_CD_GRP_SEQ =
-                                          VL.REF_CD_GRP_KEY
-                                      AND GRP.CRNT_REC_FLG = 1
-                         WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0002');
-                         
-        END IF;  ----  V_INCIDENT_STS
-    END IF; -------  P_INCDNT_RVRSE
+                   AND (   INC.INCDNT_STS =
+                           (SELECT VL.REF_CD_SEQ
+                              FROM MW_REF_CD_VAL  VL
+                                   JOIN MW_REF_CD_GRP GRP
+                                       ON     GRP.REF_CD_GRP_SEQ =
+                                              VL.REF_CD_GRP_KEY
+                                          AND GRP.CRNT_REC_FLG = 1
+                             WHERE     GRP.REF_CD_GRP = '0425'
+                                   AND VL.REF_CD = '0002')
+                        OR INC.INCDNT_STS =
+                           (SELECT VL.REF_CD_SEQ
+                              FROM MW_REF_CD_VAL  VL
+                                   JOIN MW_REF_CD_GRP GRP
+                                       ON     GRP.REF_CD_GRP_SEQ =
+                                              VL.REF_CD_GRP_KEY
+                                          AND GRP.CRNT_REC_FLG = 1
+                             WHERE     GRP.REF_CD_GRP = '0425'
+                                   AND VL.REF_CD = '0004'));
+        END IF;                                           ----  V_INCIDENT_STS
+    END IF;                                            -------  P_INCDNT_RVRSE
 
     P_INCDNT_RTN_MSG := 'SUCCESS';
 EXCEPTION

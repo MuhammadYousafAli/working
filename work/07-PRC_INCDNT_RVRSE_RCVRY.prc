@@ -107,12 +107,12 @@ BEGIN
                    AND PSD.PYMT_STS_KEY != 945;
         ELSE
             UPDATE MW_PYMT_SCHED_DTL PSD
-               SET PSD.PYMT_STS_KEY = 1145,
+               SET PSD.PYMT_STS_KEY = 945,
                    PSD.LAST_UPD_BY = P_USER_ID,
                    PSD.LAST_UPD_DT = SYSDATE
              WHERE     PSD.PYMT_SCHED_DTL_SEQ = REC.PYMT_SCHED_DTL_SEQ
                    AND PSD.CRNT_REC_FLG = 1
-                   AND PSD.PYMT_STS_KEY != 1145;
+                   AND PSD.PYMT_STS_KEY != 945;
         END IF;
         V_COUNTER := 1;
     END LOOP;
