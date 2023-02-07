@@ -1,4 +1,4 @@
-/* Formatted on 26/01/2023 3:10:14 pm (QP5 v5.326) */
+/* Formatted on 06/02/2023 12:35:33 pm (QP5 v5.326) */
 CREATE OR REPLACE PROCEDURE PRC_POST_FNRL_JVS (P_CLNT_SEQ        NUMBER,
                                                P_EXPNS_SEQ       NUMBER,
                                                P_RCVRY_SEQ       NUMBER, --59839447
@@ -6,6 +6,8 @@ CREATE OR REPLACE PROCEDURE PRC_POST_FNRL_JVS (P_CLNT_SEQ        NUMBER,
                                                P_USER_ID         VARCHAR2,
                                                V_RTN_STS     OUT VARCHAR2)
 AS
+    V_EXPNS_SEQ         NUMBER := P_EXPNS_SEQ;
+    V_RCVRY_SEQ         NUMBER := P_RCVRY_SEQ;
     V_COUNT             NUMBER := 0;
     V_ERROR_MSG         VARCHAR2 (500);
     V_EXPNS_TYP_SEQ     NUMBER;
@@ -25,7 +27,47 @@ AS
     V_ENTRY_TYP         VARCHAR2 (100);
 BEGIN
     ------------  TO POST EXPENSE ----------------
-    IF P_EXPNS_SEQ <> 0
+
+    IF (V_EXPNS_SEQ <> 0 AND V_RCVRY_SEQ = 0)
+    THEN
+        BEGIN
+            SELECT TRX.RCVRY_TRX_SEQ
+              INTO V_RCVRY_SEQ
+              FROM MW_RCVRY_TRX TRX
+             WHERE     TO_NUMBER (TRX.PYMT_REF) = P_CLNT_SEQ
+                   AND UPPER (TRX.CHNG_RSN_CMNT) LIKE '%EXP_SEQ%'
+                   AND TO_NUMBER (
+                           REGEXP_REPLACE (CHNG_RSN_CMNT, '[^[:digit:]]', '')) =
+                       V_EXPNS_SEQ;
+        EXCEPTION
+            WHEN OTHERS
+            THEN
+                V_RCVRY_SEQ := 0;
+        END;
+    END IF;
+
+    IF (V_RCVRY_SEQ <> 0 AND V_EXPNS_SEQ = 0)
+    THEN
+        BEGIN
+            SELECT EX.EXP_SEQ
+              INTO V_EXPNS_SEQ
+              FROM MW_EXP EX
+             WHERE EX.EXP_SEQ =
+                       (SELECT TO_NUMBER (
+                                   REGEXP_REPLACE (TRX.CHNG_RSN_CMNT,
+                                                   '[^[:digit:]]',
+                                                   ''))
+                          FROM MW_RCVRY_TRX TRX
+                         WHERE     TO_NUMBER (TRX.PYMT_REF) = P_CLNT_SEQ
+                               AND TRX.RCVRY_TRX_SEQ = V_RCVRY_SEQ);
+        EXCEPTION
+            WHEN OTHERS
+            THEN
+                V_EXPNS_SEQ := 0;
+        END;
+    END IF;
+
+    IF V_EXPNS_SEQ <> 0
     THEN
         BEGIN
             SELECT EX.EXPNS_TYP_SEQ,
@@ -47,7 +89,7 @@ BEGIN
                        ON     TY.TYP_SEQ = EX.EXPNS_TYP_SEQ
                           AND TY.CRNT_REC_FLG = EX.CRNT_REC_FLG
              WHERE     EX.CRNT_REC_FLG = 1
-                   AND EX.EXP_SEQ = P_EXPNS_SEQ
+                   AND EX.EXP_SEQ = V_EXPNS_SEQ
                    AND EX.POST_FLG = 0;
         EXCEPTION
             WHEN OTHERS
@@ -71,8 +113,7 @@ BEGIN
             SELECT COUNT (1)
               INTO V_EXP_FOUND
               FROM MW_ANML_RGSTR R
-             WHERE     R.ANML_RGSTR_SEQ = P_CLNT_SEQ
-                   AND R.CRNT_REC_FLG = 1;
+             WHERE R.ANML_RGSTR_SEQ = P_CLNT_SEQ AND R.CRNT_REC_FLG = 1;
 
             IF V_EXP_FOUND <> 0
             THEN
@@ -145,7 +186,7 @@ BEGIN
                    JOIN MW_EXP EX
                        ON     EX.PYMT_TYP_SEQ = TY.TYP_SEQ
                           AND EX.CRNT_REC_FLG = 1
-             WHERE TY.CRNT_REC_FLG = 1 AND EX.EXP_SEQ = P_EXPNS_SEQ;
+             WHERE TY.CRNT_REC_FLG = 1 AND EX.EXP_SEQ = V_EXPNS_SEQ;
         EXCEPTION
             WHEN OTHERS
             THEN
@@ -178,7 +219,7 @@ BEGIN
         IF V_EXPNS_AMT > 0
         THEN
             PRC_JV ('HDR/DTL',
-                    P_EXPNS_SEQ,
+                    V_EXPNS_SEQ,
                     V_EXPNS_AMT,
                     V_JV_HDR_DESC,
                     V_ENTRY_TYP,
@@ -214,14 +255,12 @@ BEGIN
            SET ME.POST_FLG = 1,
                ME.LAST_UPD_BY = P_USER_ID,
                ME.LAST_UPD_DT = SYSDATE
-         WHERE     ME.EXP_SEQ = P_EXPNS_SEQ
+         WHERE     ME.EXP_SEQ = V_EXPNS_SEQ
                AND ME.CRNT_REC_FLG = 1
                AND ME.POST_FLG = 0;
-               
-        
     END IF;
 
-    IF P_RCVRY_SEQ <> 0
+    IF V_RCVRY_SEQ <> 0
     THEN
         FOR REC
             IN (  SELECT RCH.PYMT_REF,
@@ -241,7 +280,7 @@ BEGIN
                                 AND RCD.CRNT_REC_FLG = 1
                    WHERE     RCH.CRNT_REC_FLG = 1
                          AND RCH.POST_FLG = 0
-                         AND RCH.RCVRY_TRX_SEQ = P_RCVRY_SEQ
+                         AND RCH.RCVRY_TRX_SEQ = V_RCVRY_SEQ
                 ORDER BY 4)
         LOOP
             IF V_COUNT = 0
@@ -253,7 +292,7 @@ BEGIN
                     || REC.RCVRY_TYP_DESC;
 
                 PRC_JV ('HDR',            -- INSERTION TYPE: HDR/DTL, HDR, DTL
-                        P_RCVRY_SEQ,               -- EXPENSE/RECOVERY/ANY SEQ
+                        V_RCVRY_SEQ,               -- EXPENSE/RECOVERY/ANY SEQ
                         0,                                           -- AMOUNT
                         V_JV_HDR_DESC,                       -- JV DESCRIPTION
                         'Recovery',                              -- ENTRY TYPE
@@ -374,13 +413,13 @@ BEGIN
                 RETURN;
             END IF;
         END LOOP;                                          --------------  REC
-    END IF;                                 ---------  P_RCVRY_SEQ IS NOT NULL
+    END IF;                                 ---------  V_RCVRY_SEQ IS NOT NULL
 
     UPDATE MW_RCVRY_TRX RCH
        SET RCH.POST_FLG = 1,
            RCH.LAST_UPD_BY = P_USER_ID,
            RCH.LAST_UPD_DT = SYSDATE
-     WHERE     RCH.RCVRY_TRX_SEQ = P_RCVRY_SEQ
+     WHERE     RCH.RCVRY_TRX_SEQ = V_RCVRY_SEQ
            AND RCH.POST_FLG = 0
            AND RCH.CRNT_REC_FLG = 1;
 

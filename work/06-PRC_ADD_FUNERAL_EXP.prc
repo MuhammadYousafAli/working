@@ -35,6 +35,7 @@ AS
     V_RCVRY_PYMT_AMT   NUMBER;
     V_CLNT_NM          VARCHAR2 (200);
     V_JV_HDR_DESC      VARCHAR2 (500);
+    V_REMARKS          VARCHAR2(250) := P_REMARKS||'-INCIDENT';
 BEGIN
     V_INCDNT_DT := TO_DATE (P_INCDNT_DT, 'DD-MON-RRRR');
    -- V_INCDNT_DT := '30-NOV-2022';    ------------- P_INCDNT_DT ---------------
@@ -164,7 +165,7 @@ BEGIN
                      CASE WHEN V_INCDNT_REF != 0 THEN V_INCDNT_REF ELSE P_CLNT_SEQ END,
                      P_PYMT_RCT_FLG,
                      0,
-                     P_REMARKS);
+                     V_REMARKS);
                      
         UPDATE MW_INCDNT_RPT INC
        SET INC.INCDNT_STS =
@@ -295,7 +296,7 @@ BEGIN
                                  CASE WHEN V_INCDNT_REF != 0 THEN V_INCDNT_REF ELSE P_CLNT_SEQ END,
                                  P_PYMT_RCT_FLG,
                                  0,
-                                 P_REMARKS);
+                                 V_REMARKS);
                 END IF;
 
                 SELECT RCVRY_TRX_SEQ.NEXTVAL INTO V_RCVRY_TRX_SEQ FROM DUAL;

@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE PRC_CALC_FNRL_CHRGS (
+CREATE OR REPLACE PROCEDURE MWX_KASHF_DEV.PRC_CALC_FNRL_CHRGS (
     P_CLNT_SEQ                NUMBER,
     P_INCDNT_DT               DATE,
     P_USER_ID                 VARCHAR2,
@@ -9,7 +9,8 @@ CREATE OR REPLACE PROCEDURE PRC_CALC_FNRL_CHRGS (
     P_DED_APPLD_ON             NUMBER,
     P_INC_PRIMUM_AMT           NUMBER,
     P_INCDNT_RTN_MSG_CALC   OUT VARCHAR2,
-    V_DED_AMT OUT NUMBER)
+    V_DED_AMT OUT NUMBER,
+    P_UNIQUE_NUMBER NUMBER)
 AS
     V_LOAN_INST                NUMBER;
     V_TOT_CHRG_PD_AMT            NUMBER := 0;
@@ -111,7 +112,8 @@ BEGIN
                                    RNK.LOAN_APP_SEQ,
                                    P_USER_ID,
                                    V_INCDNT_RTN_MSG_DEFF,
-                                   P_INCDNT_CHRGCD); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
+                                   P_INCDNT_CHRGCD,
+                                   P_UNIQUE_NUMBER); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
                 EXCEPTION WHEN OTHERS
                 THEN
                     NULL;  -----------  pass
@@ -161,22 +163,28 @@ BEGIN
             P_DED_BASE = 4  Based on current 24 installments bucket
             P_DED_BASE = 5  Deduct all installment
             */
+                       
 
             IF P_DED_BASE = 1
             THEN
                 P_BUCKET := 12;
+                V_INST_NO_PAID := 12;
             ELSIF P_DED_BASE = 2
             THEN
                 P_BUCKET := 6;
+                V_INST_NO_PAID := 12;
             ELSIF P_DED_BASE = 3
             THEN
                 P_BUCKET := 18;
+                V_INST_NO_PAID := 12;
             ELSIF P_DED_BASE = 4
             THEN
                 P_BUCKET := 24;
+                V_INST_NO_PAID := 12;
             ELSIF P_DED_BASE = 5
             THEN
                 P_BUCKET := 0;
+                V_INST_NO_PAID := 0;
             END IF;
 
             IF (P_BUCKET != 0 AND V_INST_NO_PAID != 0)
@@ -199,9 +207,7 @@ BEGIN
                 ELSIF (V_INST_NO_PAID / P_BUCKET) <= 6
                 THEN
                     V_INST_NO_DED := P_BUCKET * 6;
-                END IF;
-            ELSE
-                V_INST_NO_DED := 0;        --------------  DEDUCT ALL CHARGES
+                END IF;            
             END IF;
 
             IF V_INST_NO_DED >= 6
@@ -211,7 +217,8 @@ BEGIN
                                    RNK.LOAN_APP_SEQ,
                                    P_USER_ID,
                                    V_INCDNT_RTN_MSG_DEFF,
-                                   P_INCDNT_CHRGCD); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
+                                   P_INCDNT_CHRGCD,
+                                   P_UNIQUE_NUMBER); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
                 EXCEPTION
                     WHEN OTHERS
                     THEN
@@ -274,7 +281,8 @@ BEGIN
                                RNK.LOAN_APP_SEQ,
                                P_USER_ID,
                                V_INCDNT_RTN_MSG_DEFF,
-                               P_INCDNT_CHRGCD); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
+                               P_INCDNT_CHRGCD,
+                               P_UNIQUE_NUMBER); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
 
                 IF UPPER (V_INCDNT_RTN_MSG_DEFF) != 'SUCCESS'
                 THEN
@@ -287,7 +295,8 @@ BEGIN
                                RNK.LOAN_APP_SEQ,
                                P_USER_ID,
                                V_INCDNT_RTN_MSG_DEFF,
-                               P_INCDNT_CHRGCD); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
+                               P_INCDNT_CHRGCD,
+                               P_UNIQUE_NUMBER); -- CHARGES ABOVE CURRENT TENURE WILL BE DEFFFERED
 
                 IF UPPER (V_INCDNT_RTN_MSG_DEFF) != 'SUCCESS'
                 THEN

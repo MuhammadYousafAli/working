@@ -1,4 +1,4 @@
-/* Formatted on 03/02/2023 3:06:44 pm (QP5 v5.326) */
+/* Formatted on 07/02/2023 3:06:42 pm (QP5 v5.326) */
 CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_DT              VARCHAR2,
     P_CLNT_SEQ               NUMBER,
@@ -14,6 +14,7 @@ CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_RTN_MSG     OUT VARCHAR2)
 AS
     V_INCDNT_DT                DATE;
+    V_NOM                      NUMBER := 0;
     V_CLNT_TAG                 VARCHAR2 (100);
     V_OD_COUNT                 NUMBER;
     V_UNPOSTED_RECOVERY        NUMBER;
@@ -28,6 +29,7 @@ AS
     V_DED_AMT                  NUMBER := 0;
     V_DED_AMT_TOT              NUMBER := 0;
     V_INC_PRIMUM_AMT           NUMBER := 0;
+    V_UNIQUE_NUMBER            NUMBER := PSC_DEF_UNIQUE_NUM_SEQ.NEXTVAL;
 
     ---------------  FOR REVERSAL ------------------
     V_JV_HDR_SEQ_REV           NUMBER;
@@ -36,6 +38,7 @@ AS
     V_JV_HDR_SEQ_FUN           NUMBER;
     V_JV_HDR_SEQ_REC           NUMBER;
     V_INCIDENT_STS             VARCHAR2 (40);
+    P_INCDNT_RTN_MSG_DEF       VARCHAR2 (500);
 
     -----------------  CURSOR TO GET INCDNT SETUP INFORMATION -----------------
     CURSOR CR_STP_INCDNT (P_INCDNT_TYP        NUMBER,
@@ -167,16 +170,39 @@ BEGIN
         RETURN;
     END IF;
     
-
-    -------------------------------------------------------------------------
-
-    SELECT CNIC_NUM
-      INTO V_CNIC_NUM
-      FROM MW_CLNT MC
-     WHERE MC.CLNT_SEQ = P_CLNT_SEQ AND MC.CRNT_REC_FLG = 1;
-
     IF P_INCDNT_RVRSE = 0                       ----------  FOR INCIDENT ENTRY
     THEN
+    
+        ---------------------  TO CHECK IF NOMIEE ---------------------------------------
+        SELECT COUNT (1)
+          INTO V_NOM
+          FROM MW_REF_CD_VAL  VL
+               JOIN MW_REF_CD_GRP GRP
+                   ON     GRP.REF_CD_GRP_SEQ = VL.REF_CD_GRP_KEY
+                      AND GRP.CRNT_REC_FLG = 1
+         WHERE     VL.REF_CD_SEQ = P_INCDNT_EFFECTEE
+               AND VL.CRNT_REC_FLG = 1 AND VL.REF_CD = 1
+               AND GRP.REF_CD_GRP = '0418';
+
+        IF V_NOM <> 0
+        THEN
+            SELECT MRL.CNIC_NUM
+              INTO V_CNIC_NUM
+              FROM MW_LOAN_APP  AP
+                   JOIN MW_CLNT_REL MRL
+                       ON     MRL.LOAN_APP_SEQ = AP.LOAN_APP_SEQ
+                          AND MRL.CRNT_REC_FLG = 1
+                          AND MRL.REL_TYP_FLG = 1
+             WHERE     AP.LOAN_APP_STS IN (703, 1305)
+                   AND AP.LOAN_APP_SEQ = AP.PRNT_LOAN_APP_SEQ
+                   AND AP.CLNT_SEQ = P_CLNT_SEQ;
+        ELSE
+            SELECT CNIC_NUM
+              INTO V_CNIC_NUM
+              FROM MW_CLNT MC
+             WHERE MC.CLNT_SEQ = P_CLNT_SEQ AND MC.CRNT_REC_FLG = 1;
+        END IF;
+
         ------ CHECK IF INCDNT REPORTED ALREADY -----------
         SELECT COUNT (1)
           INTO V_INCDNT_ENTRY_FOUND
@@ -195,7 +221,8 @@ BEGIN
 
         IF V_INCDNT_ENTRY_FOUND > 0
         THEN
-            P_INCDNT_RTN_MSG := 'FAILED: INCIDENT ENTRY IS IN PROCESS ALREADY....';
+            P_INCDNT_RTN_MSG :=
+                'FAILED: INCIDENT ENTRY IS IN PROCESS ALREADY....';
             RETURN;
         END IF;
 
@@ -213,11 +240,11 @@ BEGIN
                 'FAILED: UNPOSTED RECOVERY. Client has Unposted recovery';
             RETURN;
         END IF;
-        
-        SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
-          INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
-          FROM MW_LOAN_APP AP
-         WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
+
+            SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
+              INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
+              FROM MW_LOAN_APP AP
+             WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
                    AND AP.CRNT_REC_FLG = 1
                    AND AP.LOAN_APP_STS IN (703, 1305)
           ORDER BY 2 DESC
@@ -470,7 +497,8 @@ BEGIN
                                 STP.DED_APLD_ON_DESC,
                                 TO_NUMBER (STP.FXD_PRMUM_DESC),
                                 P_INCDNT_RTN_MSGCALC,
-                                V_DED_AMT);
+                                V_DED_AMT,
+                                V_UNIQUE_NUMBER);
 
                             V_DED_AMT_TOT :=
                                 NVL (V_DED_AMT_TOT, 0) + NVL (V_DED_AMT, 0); --------  SUM ALL THE CHARGES TO BE DEDUCT
@@ -564,21 +592,30 @@ BEGIN
                                                       AND GRP.CRNT_REC_FLG =
                                                           1
                                          WHERE     GRP.REF_CD_GRP = '0425'
-                                               AND VL.REF_CD = '0002')))
+                                               AND VL.REF_CD = '0002')
+                                    OR INC1.INCDNT_STS =
+                                       (SELECT VL.REF_CD_SEQ
+                                          FROM MW_REF_CD_VAL  VL
+                                               JOIN MW_REF_CD_GRP GRP
+                                                   ON     GRP.REF_CD_GRP_SEQ =
+                                                          VL.REF_CD_GRP_KEY
+                                                      AND GRP.CRNT_REC_FLG =
+                                                          1
+                                         WHERE     GRP.REF_CD_GRP = '0425'
+                                               AND VL.REF_CD = '0003')))
                    AND INC.CRNT_REC_FLG = 1;
         EXCEPTION
             WHEN OTHERS
             THEN
                 ROLLBACK;
                 P_INCDNT_RTN_MSG :=
-                'ERROR PRC_INCDNT_PROCESS => ISSUE IN GETTING INCIDENT STATUSES FOR REVERSAL..'
-                || P_INCDNT_RTN_RCV_MSG
-                || SQLERRM;
-                KASHF_REPORTING.PRO_LOG_MSG (
-                'PRC_INCDNT_PROCESS',
-                P_INCDNT_RTN_MSG);
-            
-            RETURN;
+                       'ERROR PRC_INCDNT_PROCESS => ISSUE IN GETTING INCIDENT STATUSES FOR REVERSAL..'
+                    || P_INCDNT_RTN_RCV_MSG
+                    || SQLERRM;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
+                                             P_INCDNT_RTN_MSG);
+
+                RETURN;
         END;
 
         IF V_INCIDENT_STS = 'INCIDENT REPORTED'
@@ -902,16 +939,59 @@ BEGIN
                        RG.LAST_UPD_DT = SYSDATE
                  WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
             END IF;
-            
+
+            BEGIN
+                PRC_DEF_REVERSAL_CHRGES (P_CLNT_SEQ,
+                                         P_INCDNT_USER,
+                                         P_INCDNT_RTN_MSG_DEF);
+
+                IF P_INCDNT_RTN_MSG_DEF != 'SUCCESS'
+                THEN
+                    ROLLBACK;
+                    P_INCDNT_RTN_MSG_DEF :=
+                           'PRC_INCDNT_PROCESS ==> DEFFERED NOT GENERATED SUCCESSFULLY => LINE NO: '
+                        || $$PLSQL_LINE
+                        || CHR (10)
+                        || 'CLNT_SEQ:'
+                        || P_CLNT_SEQ
+                        || ' ERROR CODE: '
+                        || SQLCODE
+                        || ' ERROR MESSAGE: '
+                        || SQLERRM
+                        || 'TRACE: '
+                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
+                                                 P_INCDNT_RTN_MSG_DEF);
+                    RETURN;
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    ROLLBACK;
+                    P_INCDNT_RTN_MSG_DEF :=
+                           'PRC_INCDNT_PROCESS ==> ISSUE IN FN_DEF_REVERSAL_CHRGES PROCEDURE => LINE NO: '
+                        || $$PLSQL_LINE
+                        || CHR (10)
+                        || 'CLNT_SEQ:'
+                        || P_CLNT_SEQ
+                        || ' ERROR CODE: '
+                        || SQLCODE
+                        || ' ERROR MESSAGE: '
+                        || SQLERRM
+                        || 'TRACE: '
+                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
+                                                 P_INCDNT_RTN_MSG_DEF);
+            END;
         ELSIF V_INCIDENT_STS = 'FUNERAL SAVED'
         THEN
-            
             UPDATE MW_EXP EX
                SET EX.DEL_FLG = 1,
+                   EX.CRNT_REC_FLG = 0,
                    EX.LAST_UPD_BY = P_INCDNT_USER,
                    EX.LAST_UPD_DT = SYSDATE
-             WHERE  EX.EXP_REF = P_CLNT_SEQ
-                   AND EX.EXPNS_TYP_SEQ IN (424,423)
+             WHERE     EX.EXP_REF = P_CLNT_SEQ
+                   AND EX.EXPNS_TYP_SEQ IN (424, 423)
                    AND EX.POST_FLG = 0
                    AND EX.DEL_FLG = 0;
 
@@ -925,7 +1005,7 @@ BEGIN
                                    (SELECT MAX (RCH.RCVRY_TRX_SEQ)
                                       FROM MW_RCVRY_TRX RCH
                                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                                           AND RCH.POST_FLG = 1
+                                           AND RCH.POST_FLG = 0
                                            AND RCH.PYMT_STS_KEY = 1001
                                            AND RCH.CRNT_REC_FLG = 1));
 
@@ -938,7 +1018,7 @@ BEGIN
                    (SELECT MAX (RCH.RCVRY_TRX_SEQ)
                       FROM MW_RCVRY_TRX RCH
                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                           AND RCH.POST_FLG = 1
+                           AND RCH.POST_FLG = 0
                            AND RCH.PYMT_STS_KEY = 1001
                            AND RCH.CRNT_REC_FLG = 1);
 
@@ -976,7 +1056,8 @@ BEGIN
                                           VL.REF_CD_GRP_KEY
                                       AND GRP.CRNT_REC_FLG = 1
                          WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004');
-        ELSIF V_INCIDENT_STS IN ('FUNERAL PAID')
+        ELSIF V_INCIDENT_STS IN
+                  ('FUNERAL PAID', 'LOAN ADJUSTED AGAINST INCIDENT')
         THEN
             SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_FUN FROM DUAL;
 
@@ -1208,8 +1289,17 @@ BEGIN
                                        ON     GRP.REF_CD_GRP_SEQ =
                                               VL.REF_CD_GRP_KEY
                                           AND GRP.CRNT_REC_FLG = 1
-                             WHERE     GRP.REF_CD_GRP = '0425'
-                                   AND VL.REF_CD = '0004'));
+                             WHERE        GRP.REF_CD_GRP = '0425'
+                                      AND VL.REF_CD = '0004'
+                                   OR INC.INCDNT_STS =
+                                      (SELECT VL.REF_CD_SEQ
+                                         FROM MW_REF_CD_VAL  VL
+                                              JOIN MW_REF_CD_GRP GRP
+                                                  ON     GRP.REF_CD_GRP_SEQ =
+                                                         VL.REF_CD_GRP_KEY
+                                                     AND GRP.CRNT_REC_FLG = 1
+                                        WHERE     GRP.REF_CD_GRP = '0425'
+                                              AND VL.REF_CD = '0003')));
         END IF;                                           ----  V_INCIDENT_STS
     END IF;                                            -------  P_INCDNT_RVRSE
 

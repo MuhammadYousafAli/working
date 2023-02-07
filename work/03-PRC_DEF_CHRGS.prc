@@ -3,7 +3,8 @@ CREATE OR REPLACE PROCEDURE PRC_DEF_CHRGS (
     P_LOAN_APP_SEQ        IN     NUMBER,
     P_USER_ID            IN     VARCHAR2,
     P_INCDNT_RTN_MSG_DEF      OUT VARCHAR2,
-    P_INCDNT_CHRG_CD      IN     NUMBER)
+    P_INCDNT_CHRG_CD      IN     NUMBER,
+    P_UNIQUE_NUMBER         NUMBER)
 AS
     V_DEF_AMT            NUMBER;
     V_DSBMT_HDR_SEQ       MW_DSBMT_VCHR_HDR.DSBMT_HDR_SEQ%TYPE;
@@ -15,6 +16,7 @@ AS
     V_GL_ACCT_NUMMISC     MW_TYPS.GL_ACCT_NUM%TYPE;
     V_DEF_ACCT_NUMMISC    MW_TYPS.DFRD_ACCT_NUM%TYPE;
     V_PRD_SEQ            MW_LOAN_APP.PRD_SEQ%TYPE;
+    V_UNIQUE             NUMBER;
 BEGIN
     P_INCDNT_RTN_MSG_DEF := NULL;
 
@@ -91,7 +93,8 @@ BEGIN
                SET CHRG.LAST_UPD_DT = SYSDATE,
                    CHRG.LAST_UPD_BY = P_USER_ID,
                    CHRG.DEL_FLG = 1,
-                   CHRG.CRNT_REC_FLG = 0
+                   CHRG.CRNT_REC_FLG = 0,
+                   CHRG.CRTD_BY = P_UNIQUE_NUMBER
              WHERE     CHRG.PYMT_SCHED_DTL_SEQ IN
                            (SELECT PYMT_SCHED_DTL_SEQ
                               FROM MW_PYMT_SCHED_DTL PSD
@@ -99,7 +102,8 @@ BEGIN
                                        V_PYMT_SCHED_HDR_SEQ
                                    AND PSD.INST_NUM > P_INST_NUM
                                    AND PSD.CRNT_REC_FLG = 1)
-                   AND CHRG.CHRG_TYPS_SEQ = P_INCDNT_CHRG_CD;
+                   AND CHRG.CHRG_TYPS_SEQ = P_INCDNT_CHRG_CD
+                   AND CHRG.CRNT_REC_FLG = 1;
 
             UPDATE MW_PYMT_SCHED_DTL PSD1
                SET PSD1.PYMT_STS_KEY = 945,
