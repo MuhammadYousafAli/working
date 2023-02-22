@@ -106,6 +106,7 @@ BEGIN
                     || 'TRACE: '
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+                V_RTN_STS := 'Funeral Expense is already posted or Not Found -0001';
                 RETURN;
         END;
 
@@ -170,6 +171,7 @@ BEGIN
                     || 'TRACE: '
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+                V_RTN_STS := 'Clnt Name Not Found for Animal -0001';
                 RETURN;
         END;
 
@@ -202,6 +204,7 @@ BEGIN
                     || 'TRACE: '
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+                V_RTN_STS := 'Expense Typs not found -0001';
                 RETURN;
         END;
 
@@ -247,6 +250,7 @@ BEGIN
                     || 'TRACE: '
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+                V_RTN_STS := 'Expense Jv not created successfully -0001';
                 RETURN;
             END IF;
         END IF;
@@ -321,6 +325,7 @@ BEGIN
                         || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                     KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS',
                                                  V_RTN_STS);
+                    V_RTN_STS := 'Incident Receivable Jv not created successfully -0001';
                     RETURN;
                 END IF;
 
@@ -331,7 +336,7 @@ BEGIN
             THEN
                 BEGIN
                     SELECT HIP.GL_ACCT_NUM     GL_ACCT_NUM
-                      INTO V_DBT_GL_ACCT_NUM
+                      INTO V_CRD_GL_ACCT_NUM
                       FROM MW_CLNT_HLTH_INSR  CHI
                            JOIN MW_HLTH_INSR_PLAN HIP
                                ON     HIP.HLTH_INSR_PLAN_SEQ =
@@ -366,11 +371,12 @@ BEGIN
                             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                         KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS',
                                                      V_RTN_STS);
+                        V_RTN_STS := 'GL Code not found for KSZB/KC/KST -0001';
                         RETURN;
                 END;
             ELSE
                 SELECT GL_ACCT_NUM
-                  INTO V_DBT_GL_ACCT_NUM
+                  INTO V_CRD_GL_ACCT_NUM 
                   FROM MW_TYPS MT
                  WHERE     MT.TYP_SEQ = REC.CHRG_TYP_KEY
                        AND MT.CRNT_REC_FLG = 1
@@ -378,9 +384,9 @@ BEGIN
             END IF;
 
             SELECT GL_ACCT_NUM
-              INTO V_CRD_GL_ACCT_NUM
+              INTO V_DBT_GL_ACCT_NUM
               FROM MW_TYPS MT
-             WHERE MT.TYP_SEQ = REC.RCVRY_TYP_SEQ AND MT.CRNT_REC_FLG = 1;
+             WHERE MT.TYP_SEQ = 424 AND MT.CRNT_REC_FLG = 1;
 
             PRC_JV ('DTL',                -- INSERTION TYPE: HDR/DTL, HDR, DTL
                     0,                             -- EXPENSE/RECOVERY/ANY SEQ
@@ -410,6 +416,7 @@ BEGIN
                     || 'TRACE: '
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+                V_RTN_STS := 'Incident Receivable detail Jv not created successfully -0001';
                 RETURN;
             END IF;
         END LOOP;                                          --------------  REC
@@ -459,6 +466,7 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+        V_RTN_STS := 'Generic Error in Funeral posting-No Data Found..-0001';
         RETURN;
     WHEN OTHERS
     THEN
@@ -474,6 +482,7 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_POST_FNRL_JVS', V_RTN_STS);
+        V_RTN_STS := 'Generic Error in Funeral posting-Other..-0002';
         RETURN;
 END;
 /

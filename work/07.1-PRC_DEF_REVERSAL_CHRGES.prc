@@ -148,6 +148,7 @@ BEGIN
                 || 'TRACE: '
                 || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
             KASHF_REPORTING.PRO_LOG_MSG ('PRC_DEF_REVERSAL_CHRGES', P_INCDNT_RTN_MSG);
+            P_INCDNT_RTN_MSG := 'Issue in KTK (Deffered) charges reversal..-0001';
             RETURN;
         END;
     ------------------------------------------------
@@ -168,31 +169,22 @@ BEGIN
                          CHRG.SYNC_FLG,
                          CHRG.STP_VAL_EID_SEQ,
                          CHRG.REMARKS
-                    FROM MW_JV_HDR MJH
-                         JOIN MW_JV_DTL MJD ON MJD.JV_HDR_SEQ = MJH.JV_HDR_SEQ
-                         JOIN MW_DSBMT_VCHR_HDR DSH
-                             ON     DSH.DSBMT_HDR_SEQ = MJH.ENTY_SEQ
-                                AND DSH.CRNT_REC_FLG = 1
-                         JOIN MW_PYMT_SCHED_HDR PSH
-                             ON     PSH.LOAN_APP_SEQ = DSH.LOAN_APP_SEQ
-                                AND PSH.CRNT_REC_FLG = 1
-                         JOIN MW_PYMT_SCHED_DTL PSD
-                             ON     PSD.PYMT_SCHED_HDR_SEQ =
-                                    PSH.PYMT_SCHED_HDR_SEQ
-                                AND PSD.CRNT_REC_FLG = 1
-                         JOIN MW_PYMT_SCHED_CHRG CHRG
-                             ON     CHRG.PYMT_SCHED_DTL_SEQ =
-                                    PSD.PYMT_SCHED_DTL_SEQ
-                                AND CHRG.CRNT_REC_FLG = 0
-                                AND CHRG.DEL_FLG = 1
-                   WHERE     MJD.CRDT_DBT_FLG = 1
-                         AND MJH.JV_DSCR = 'DEFFERED ENTRY DUE TO CLIENT DEATH'
-                         AND MJH.CLNT_SEQ = P_CLNT_SEQ
-                         AND EXISTS (SELECT MJH1.JV_HDR_SEQ FROM MW_JV_HDR MJH1 WHERE MJH1.ENTY_SEQ = DSH.DSBMT_HDR_SEQ
-                         AND MJH1.PRNT_VCHR_REF IS NOT NULL AND MJH1.JV_DSCR LIKE '%DEFFERED ENTRY DUE TO CLIENT DEATH%')     
-                         AND CHRG.CRTD_BY = (SELECT MAX(CHRG1.CRTD_BY) FROM  MW_PYMT_SCHED_CHRG CHRG1 
-                                            WHERE CHRG1.PYMT_SCHED_DTL_SEQ = CHRG.PYMT_SCHED_DTL_SEQ
-                                            AND CHRG1.DEL_FLG = 1) 
+                    FROM MW_LOAN_APP AP
+                     JOIN MW_PYMT_SCHED_HDR PSH
+                         ON PSH.LOAN_APP_SEQ = AP.LOAN_APP_SEQ AND PSH.CRNT_REC_FLG = 1
+                     JOIN MW_PYMT_SCHED_DTL PSD
+                         ON     PSD.PYMT_SCHED_HDR_SEQ = PSH.PYMT_SCHED_HDR_SEQ
+                            AND PSD.CRNT_REC_FLG = 1
+                     JOIN MW_PYMT_SCHED_CHRG CHRG
+                         ON     CHRG.PYMT_SCHED_DTL_SEQ = PSD.PYMT_SCHED_DTL_SEQ
+                            AND CHRG.CRNT_REC_FLG = 0
+                            AND CHRG.DEL_FLG = 1
+               WHERE AP.CLNT_SEQ = P_CLNT_SEQ         
+                     AND CHRG.CRTD_BY =
+                         (SELECT MAX (CHRG1.CRTD_BY)
+                            FROM MW_PYMT_SCHED_CHRG CHRG1
+                           WHERE     CHRG1.PYMT_SCHED_DTL_SEQ = CHRG.PYMT_SCHED_DTL_SEQ
+                                 AND CHRG1.DEL_FLG = 1)
                 GROUP BY CHRG.PYMT_SCHED_CHRG_SEQ,
                          CHRG.EFF_START_DT,
                          CHRG.PYMT_SCHED_DTL_SEQ,
@@ -272,6 +264,10 @@ BEGIN
                    WHERE     MJD.CRDT_DBT_FLG = 1
                          AND MJH.JV_DSCR = 'DEFFERED ENTRY DUE TO CLIENT DEATH'
                          AND MJH.CLNT_SEQ = P_CLNT_SEQ
+                         AND NOT EXISTS (
+                            SELECT 1 FROM MW_JV_HDR MJ WHERE MJ.PRNT_VCHR_REF = MJH.JV_HDR_SEQ 
+                            AND MJ.CLNT_SEQ = P_CLNT_SEQ
+                         )
                 GROUP BY MJH.JV_HDR_SEQ,
                          MJH.PRNT_VCHR_REF,
                          MJH.JV_ID,
@@ -345,16 +341,7 @@ BEGIN
                              MJD1.DSCR,
                              MJD1.LN_ITM_NUM
                         FROM MW_JV_DTL MJD1
-                       WHERE MJD1.JV_HDR_SEQ IN
-                                 (SELECT MJD.JV_HDR_SEQ
-                                    FROM MW_JV_HDR MJH
-                                         JOIN MW_JV_DTL MJD
-                                             ON MJD.JV_HDR_SEQ = MJH.JV_HDR_SEQ
-                                   WHERE     MJD.CRDT_DBT_FLG = 1
-                                         AND MJH.JV_DSCR =
-                                             'DEFFERED ENTRY DUE TO CLIENT DEATH'
-                                         AND MJH.JV_HDR_SEQ = J.JV_HDR_SEQ
-                                         AND MJH.CLNT_SEQ = P_CLNT_SEQ)
+                       WHERE MJD1.JV_HDR_SEQ = J.JV_HDR_SEQ                                                             
                     GROUP BY MJD1.JV_DTL_SEQ,
                              MJD1.JV_HDR_SEQ,
                              MJD1.CRDT_DBT_FLG,
@@ -403,6 +390,7 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_DEF_REVERSAL_CHRGES', P_INCDNT_RTN_MSG);
+        P_INCDNT_RTN_MSG := 'Generic Error Deffered reversal..-0001';
         RETURN;
 END;
 /

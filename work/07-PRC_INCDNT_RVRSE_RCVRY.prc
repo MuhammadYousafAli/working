@@ -78,42 +78,15 @@ BEGIN
                RCH.CHNG_RSN_CMNT =
                       'REVERSE DUE TO INCIDENT PROCESS DATED: '|| TO_DATE (SYSDATE)||V_UNIQUE_NO
          WHERE RCH.RCVRY_TRX_SEQ = REC.RCVRY_TRX_SEQ AND RCH.CRNT_REC_FLG = 1;
-
-
-        SELECT   NVL (PSD.PPAL_AMT_DUE, 0)
-               + NVL (PSD.TOT_CHRG_DUE, 0)
-               + NVL (
-                     (  SELECT SUM (PSC.AMT)
-                          FROM MW_PYMT_SCHED_CHRG PSC
-                         WHERE     PSC.PYMT_SCHED_DTL_SEQ =
-                                   PSD.PYMT_SCHED_DTL_SEQ
-                               AND PSC.CRNT_REC_FLG = 1
-                      GROUP BY PSC.PYMT_SCHED_DTL_SEQ),
-                     0)
-          INTO V_DUE_AMT
-          FROM MW_PYMT_SCHED_DTL PSD
+       
+        UPDATE MW_PYMT_SCHED_DTL PSD
+           SET PSD.PYMT_STS_KEY = 945,
+               PSD.LAST_UPD_BY = P_USER_ID,
+               PSD.LAST_UPD_DT = SYSDATE
          WHERE     PSD.PYMT_SCHED_DTL_SEQ = REC.PYMT_SCHED_DTL_SEQ
-               AND PSD.CRNT_REC_FLG = 1;
-
-        -----------  UPDATE PYMT STS ------------------
-        IF V_DUE_AMT <= REC.PYMT_AMT
-        THEN
-            UPDATE MW_PYMT_SCHED_DTL PSD
-               SET PSD.PYMT_STS_KEY = 945,
-                   PSD.LAST_UPD_BY = P_USER_ID,
-                   PSD.LAST_UPD_DT = SYSDATE
-             WHERE     PSD.PYMT_SCHED_DTL_SEQ = REC.PYMT_SCHED_DTL_SEQ
-                   AND PSD.CRNT_REC_FLG = 1
-                   AND PSD.PYMT_STS_KEY != 945;
-        ELSE
-            UPDATE MW_PYMT_SCHED_DTL PSD
-               SET PSD.PYMT_STS_KEY = 945,
-                   PSD.LAST_UPD_BY = P_USER_ID,
-                   PSD.LAST_UPD_DT = SYSDATE
-             WHERE     PSD.PYMT_SCHED_DTL_SEQ = REC.PYMT_SCHED_DTL_SEQ
-                   AND PSD.CRNT_REC_FLG = 1
-                   AND PSD.PYMT_STS_KEY != 945;
-        END IF;
+               AND PSD.CRNT_REC_FLG = 1
+               AND PSD.PYMT_STS_KEY != 945;
+        
         V_COUNTER := 1;
     END LOOP;
 
@@ -153,6 +126,7 @@ BEGIN
             KASHF_REPORTING.PRO_LOG_MSG (
                 'PRC_INCDNT_RVRSE_RCVRY',
                    P_INCDNT_RTN_MSG);
+            P_INCDNT_RTN_MSG := 'JV not found for Incident Recovery Reversal..-0001';
             RETURN;
         END;
         
@@ -178,7 +152,7 @@ BEGIN
                 || SQLERRM;
             KASHF_REPORTING.PRO_LOG_MSG (
                 'PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
-            
+            P_INCDNT_RTN_MSG := 'JV not found for Incident Reversal..-0002';
             RETURN;
         ELSE
             IF V_RVRSL_JV_FOUND = 0 ----- IF REVERSAL JV CREATED ALREADY
@@ -240,15 +214,16 @@ BEGIN
                 WHEN OTHERS
                 THEN
                     ROLLBACK;
-                     P_INCDNT_RTN_MSG :=
-                           'ERROR PRC_INCDNT_RVRSE_RCVRY => ISSUE IN JV CREATION CLNT==> P_CLNT_SEQ='
+                    P_INCDNT_RTN_MSG :=
+                           'ERROR PRC_INCDNT_RVRSE_RCVRY => JV NOT FOUND-FOR REVERSAL JV CREATED  ==> P_CLNT_SEQ='
                         || P_CLNT_SEQ
-                        ||'--'
-                        || SQLERRM;                        
+                        ||'  LINE NO: '
+                        || $$PLSQL_LINE
+                        ||'--RCVRY_TRX_SEQ'||RCV.RCVRY_TRX_SEQ||'--'
+                        || SQLERRM;
                     KASHF_REPORTING.PRO_LOG_MSG (
-                        'PRC_INCDNT_RVRSE_RCVRY',
-                           P_INCDNT_RTN_MSG);
-                   
+                        'PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
+                    P_INCDNT_RTN_MSG := 'Issue in JV Creation for Incident Reversal..-0001';
                     RETURN;
                 END;
             END IF;
@@ -362,14 +337,16 @@ BEGIN
                 IF P_INCDNT_RTN_JV_MSG LIKE '%EXCEPTION%'
                 THEN
                     ROLLBACK;
-                    KASHF_REPORTING.PRO_LOG_MSG (
-                        'PRC_INCDNT_RVRSE_RCVRY',
-                           'JV ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT:  CLNT==> P_CLNT_SEQ='
-                        || P_CLNT_SEQ
-                        || SQLERRM);
                     P_INCDNT_RTN_MSG :=
-                           'ERROR PRC_INCDNT_RVRSE_RCVRY => JV ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT:  CLNT==> P_CLNT_SEQ='
-                        || P_CLNT_SEQ;
+                           'ERROR PRC_INCDNT_RVRSE_RCVRY => JV ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT  ==> P_CLNT_SEQ='
+                        || P_CLNT_SEQ
+                        ||'  LINE NO: '
+                        || $$PLSQL_LINE
+                        ||'--RCVRY_TRX_SEQ'||RCV.RCVRY_TRX_SEQ||'--'
+                        || SQLERRM;
+                    KASHF_REPORTING.PRO_LOG_MSG (
+                        'PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
+                    P_INCDNT_RTN_MSG := 'Issue in Excess Creation for Incident Reversal..-0001';
                     RETURN;
                 END IF;
             
@@ -377,15 +354,17 @@ BEGIN
             WHEN OTHERS
             THEN
                 ROLLBACK;
-                KASHF_REPORTING.PRO_LOG_MSG (
-                    'PRC_INCDNT_RVRSE_RCVRY',
-                       'ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT:  CLNT==> P_CLNT_SEQ='
-                    || P_CLNT_SEQ
-                    || SQLERRM);
                 P_INCDNT_RTN_MSG :=
-                       'ERROR PRC_INCDNT_RVRSE_RCVRY => ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT:  CLNT==> P_CLNT_SEQ='
-                    || P_CLNT_SEQ;
-                RETURN;
+                       'ERROR PRC_INCDNT_RVRSE_RCVRY => JV ISSUE IN EXCESS RECOVERY CREATED DUE TO INCIDENT CLIENT  ==> P_CLNT_SEQ='
+                    || P_CLNT_SEQ
+                    ||'  LINE NO: '
+                    || $$PLSQL_LINE
+                    ||'--RCVRY_TRX_SEQ'||RCV.RCVRY_TRX_SEQ||'--'
+                    || SQLERRM;
+                KASHF_REPORTING.PRO_LOG_MSG (
+                    'PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
+                P_INCDNT_RTN_MSG := 'Issue in Excess Creation for Incident Reversal..-0002';
+                RETURN;                
             END;
         END IF; -----------  V_EXCESS_RCV_FOUND---------------------  END EXCESS RECOVERIES  ------------------------------
     END LOOP;
@@ -405,7 +384,7 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_RVRSE_RCVRY',P_INCDNT_RTN_MSG);
-        
+        P_INCDNT_RTN_MSG := 'Generic Error in Recovery Reversal..-0001';
         RETURN;
 END;
 /

@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE PRC_DEF_CHRGS (
+CREATE OR REPLACE PROCEDURE KSHF_ITQA.PRC_DEF_CHRGS (
     P_INST_NUM           IN     NUMBER,
     P_LOAN_APP_SEQ        IN     NUMBER,
     P_USER_ID            IN     VARCHAR2,
@@ -81,8 +81,7 @@ BEGIN
     THEN            
         V_DEF_AMT := 0;
         V_DSBMT_HDR_SEQ := NULL;
-        P_INCDNT_RTN_MSG_DEF :=
-            'ISSUE IN PRC_DEF_CHRGS WITH KSZB/KC/KST DEFFERMENT..[PRC_DEF_CHRGS]';
+        P_INCDNT_RTN_MSG_DEF := 'SUCCESS';
         RETURN;
     END;
 
@@ -105,56 +104,60 @@ BEGIN
                    AND CHRG.CHRG_TYPS_SEQ = P_INCDNT_CHRG_CD
                    AND CHRG.CRNT_REC_FLG = 1;
 
-            UPDATE MW_PYMT_SCHED_DTL PSD1
-               SET PSD1.PYMT_STS_KEY = 945,
-                   PSD1.LAST_UPD_DT = SYSDATE,
-                   PSD1.LAST_UPD_BY = P_USER_ID
-             WHERE     PSD1.PYMT_SCHED_HDR_SEQ = V_PYMT_SCHED_HDR_SEQ
-                   AND PSD1.PYMT_STS_KEY IN (947, 1145)
-                   AND PSD1.CRNT_REC_FLG = 1
-                   AND NOT EXISTS
-                           (SELECT PSD.PYMT_SCHED_DTL_SEQ
-                              FROM MW_LOAN_APP  LA
-                                   JOIN MW_PYMT_SCHED_HDR PSH
-                                       ON     LA.LOAN_APP_SEQ =
-                                              PSH.LOAN_APP_SEQ
-                                          AND PSH.CRNT_REC_FLG = 1
-                                   JOIN MW_PYMT_SCHED_DTL PSD
-                                       ON     PSH.PYMT_SCHED_HDR_SEQ =
-                                              PSD.PYMT_SCHED_HDR_SEQ
-                                          AND PSD.CRNT_REC_FLG = 1
-                                   JOIN MW_PYMT_SCHED_CHRG PSC
-                                       ON     PSD.PYMT_SCHED_DTL_SEQ =
-                                              PSC.PYMT_SCHED_DTL_SEQ
-                                          AND PSC.CRNT_REC_FLG = 1
-                                   LEFT OUTER JOIN MW_RCVRY_DTL RD
-                                       ON     RD.PYMT_SCHED_DTL_SEQ =
-                                              PSD.PYMT_SCHED_DTL_SEQ
-                                          AND RD.CHRG_TYP_KEY =
-                                              PSC.CHRG_TYPS_SEQ
-                                          AND RD.CRNT_REC_FLG = 1
-                                   JOIN MW_RCVRY_TRX RT
-                                       ON     RT.RCVRY_TRX_SEQ =
-                                              RD.RCVRY_TRX_SEQ
-                                          AND RT.CRNT_REC_FLG = 1
-                             WHERE     PSD.PYMT_SCHED_DTL_SEQ =
-                                       PSD1.PYMT_SCHED_DTL_SEQ
-                                   AND LA.CRNT_REC_FLG = 1
-                                   AND LA.LOAN_APP_STS = 703);
+--            UPDATE MW_PYMT_SCHED_DTL PSD1
+--               SET PSD1.PYMT_STS_KEY = 945,
+--                   PSD1.LAST_UPD_DT = SYSDATE,
+--                   PSD1.LAST_UPD_BY = P_USER_ID
+--             WHERE     PSD1.PYMT_SCHED_HDR_SEQ = V_PYMT_SCHED_HDR_SEQ
+--                   AND PSD1.PYMT_STS_KEY IN (947, 1145)
+--                   AND PSD1.CRNT_REC_FLG = 1
+--                   AND NOT EXISTS
+--                           (SELECT PSD.PYMT_SCHED_DTL_SEQ
+--                              FROM MW_LOAN_APP  LA
+--                                   JOIN MW_PYMT_SCHED_HDR PSH
+--                                       ON     LA.LOAN_APP_SEQ =
+--                                              PSH.LOAN_APP_SEQ
+--                                          AND PSH.CRNT_REC_FLG = 1
+--                                   JOIN MW_PYMT_SCHED_DTL PSD
+--                                       ON     PSH.PYMT_SCHED_HDR_SEQ =
+--                                              PSD.PYMT_SCHED_HDR_SEQ
+--                                          AND PSD.CRNT_REC_FLG = 1
+--                                   JOIN MW_PYMT_SCHED_CHRG PSC
+--                                       ON     PSD.PYMT_SCHED_DTL_SEQ =
+--                                              PSC.PYMT_SCHED_DTL_SEQ
+--                                          AND PSC.CRNT_REC_FLG = 1
+--                                   LEFT OUTER JOIN MW_RCVRY_DTL RD
+--                                       ON     RD.PYMT_SCHED_DTL_SEQ =
+--                                              PSD.PYMT_SCHED_DTL_SEQ
+--                                          AND RD.CHRG_TYP_KEY =
+--                                              PSC.CHRG_TYPS_SEQ
+--                                          AND RD.CRNT_REC_FLG = 1
+--                                   JOIN MW_RCVRY_TRX RT
+--                                       ON     RT.RCVRY_TRX_SEQ =
+--                                              RD.RCVRY_TRX_SEQ
+--                                          AND RT.CRNT_REC_FLG = 1
+--                             WHERE     PSD.PYMT_SCHED_DTL_SEQ =
+--                                       PSD1.PYMT_SCHED_DTL_SEQ
+--                                   AND LA.CRNT_REC_FLG = 1
+--                                   AND LA.LOAN_APP_STS = 703);
         EXCEPTION
         WHEN OTHERS
         THEN
             ROLLBACK;
-            KASHF_REPORTING.PRO_LOG_MSG (
-                'PRC_DEF_CHRGS',
-                   'ISSUE IN UPDATING PYMT_CHRG/DTL:  CLNT==> V_CLNT_SEQ='
-                || V_CLNT_SEQ
-                || SQLERRM);
             P_INCDNT_RTN_MSG_DEF :=
-                   'ERROR ISSUE IN UPDATING PYMT_CHRG/DTL => PRC_DEF_CHRGS:  CLNT==> V_CLNT_SEQ='
-                || V_CLNT_SEQ
-                || ' [ORACLE ERROR] : '||SQLERRM;
-            RETURN;    
+                   'PRC_DEF_CHRGS ==> ISSUE IN UPDATING PYMT_CHRG/DTL => LINE NO: '
+                || $$PLSQL_LINE
+                || CHR (10)
+                || ' ERROR CODE: '
+                || SQLCODE
+                || ' ERROR MESSAGE: '
+                || SQLERRM
+                || 'TRACE: '
+                || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+            KASHF_REPORTING.PRO_LOG_MSG ('PRC_DEF_CHRGS',
+                                         P_INCDNT_RTN_MSG_DEF);
+            P_INCDNT_RTN_MSG_DEF := 'Issue in updating pymt charges / pymt dtl -0001';                             
+            RETURN;
         END;
 
         IF V_PRD_SEQ != 51     ----  NO JV IN CASE OF TOPUP
@@ -196,20 +199,44 @@ BEGIN
             WHEN OTHERS
             THEN
                 ROLLBACK;
-                KASHF_REPORTING.PRO_LOG_MSG (
-                    'PRC_DEF_CHRGS',
-                       'ISSUE IN CREATING JV:  CLNT==> V_CLNT_SEQ='
-                    || V_CLNT_SEQ
-                    || SQLERRM);
                 P_INCDNT_RTN_MSG_DEF :=
-                       'ERROR ISSUE IN CREATING JV => PRC_DEF_CHRGS:  CLNT==> V_CLNT_SEQ='
-                    || V_CLNT_SEQ
-                    || ' [ORACLE ERROR] : '||SQLERRM;
-                RETURN;    
+                       'PRC_DEF_CHRGS ==> ISSUE IN JV CREATION => LINE NO: '
+                    || $$PLSQL_LINE
+                    || CHR (10)
+                    || ' ERROR CODE: '
+                    || SQLCODE
+                    || ' ERROR MESSAGE: '
+                    || SQLERRM
+                    || 'TRACE: '
+                    || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_DEF_CHRGS',
+                                             P_INCDNT_RTN_MSG_DEF);
+                P_INCDNT_RTN_MSG_DEF := 'Issue in JV Creation -00101';                             
+                RETURN;
             END;
         END IF;
     END IF;
 
     P_INCDNT_RTN_MSG_DEF := 'SUCCESS';
+    
+EXCEPTION
+        WHEN OTHERS
+        THEN
+            ROLLBACK;
+            P_INCDNT_RTN_MSG_DEF :=
+                   'PRC_DEF_CHRGS ==> GENERIC ERROR IN PRC_DEF_CHRGS => LINE NO: '
+                || $$PLSQL_LINE
+                || CHR (10)
+                || ' ERROR CODE: '
+                || SQLCODE
+                || ' ERROR MESSAGE: '
+                || SQLERRM
+                || 'TRACE: '
+                || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+            KASHF_REPORTING.PRO_LOG_MSG ('PRC_DEF_CHRGS',
+                                         P_INCDNT_RTN_MSG_DEF);
+            P_INCDNT_RTN_MSG_DEF := 'Generic Error in PRC_DEF_CHRGS-0001';                             
+            RETURN;
+        END;    
 END;
 /

@@ -1,9 +1,10 @@
+/* Formatted on 07/02/2023 6:05:17 pm (QP5 v5.326) */
 -------------------  REVERSAL SCRIPT ------------
 
 DECLARE
-    ERR_942        EXCEPTION;
-    ERR_2298       EXCEPTION;
-    PRAGMA EXCEPTION_INIT (ERR_942, -942);    
+    ERR_942     EXCEPTION;
+    ERR_2298    EXCEPTION;
+    PRAGMA EXCEPTION_INIT (ERR_942, -942);
     PRAGMA EXCEPTION_INIT (ERR_2298, -2289);
 
     P_RTN_MSG   VARCHAR2 (1000);
@@ -23,7 +24,7 @@ BEGIN
         THEN
             DBMS_OUTPUT.put_line ('MW_INCDNT_RPT TABLE - DOES NOT EXIST');
     END;
-    
+
     BEGIN
         EXECUTE IMMEDIATE 'DROP SEQUENCE INCDNT_STP_SEQ';
     EXCEPTION
@@ -33,19 +34,27 @@ BEGIN
     END;
     
     BEGIN
+        EXECUTE IMMEDIATE 'DROP SEQUENCE PSC_DEF_UNIQUE_NUM_SEQ';
+    EXCEPTION
+        WHEN ERR_2298
+        THEN
+            DBMS_OUTPUT.put_line ('PSC_DEF_UNIQUE_NUM_SEQ SEQUANCE- DOES NOT EXIST');
+    END;
+
+    BEGIN
         EXECUTE IMMEDIATE 'DROP SEQUENCE INCDNT_RPT_SEQ';
     EXCEPTION
         WHEN ERR_2298
         THEN
             DBMS_OUTPUT.put_line ('INCDNT_RPT_SEQ SEQUANCE- DOES NOT EXIST');
-    END;        
-    
+    END;
+
     DELETE FROM MW_REF_CD_VAL VAL
           WHERE     VAL.LAST_UPD_BY = 'yousaf.ali'
                 AND VAL.REF_CD_GRP_KEY IN
                         (SELECT GRP.REF_CD_GRP_SEQ
                            FROM MW_REF_CD_GRP GRP
-                          WHERE    GRP.LAST_UPD_BY = 'yousaf.ali'
+                          WHERE     GRP.LAST_UPD_BY = 'yousaf.ali'
                                 AND GRP.REF_CD_GRP_NM IN
                                         ('INCIDENT TYPE',
                                          'DISABILITY CATEGORY',
@@ -192,7 +201,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              0,
              NULL,
              1);
-             
+
 
 INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
                            EFF_START_DT,
@@ -455,7 +464,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              0,
              NULL,
              1);
-             
+
 ---------------  DISABILITY CATEGORY ---------------
 
 INSERT INTO MW_REF_CD_GRP (REF_CD_GRP_SEQ,
@@ -803,7 +812,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);             
+             1);
 
 
 ----------------------  INCDNT_EFFECTEE VEHICLE---------------------
@@ -862,7 +871,8 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);               
+             1);
+
 ----------------------  PRODUCT CHARGE TYPE FOR INCIDENT CALCULATION ---------------------
 
 INSERT INTO MW_REF_CD_GRP (REF_CD_GRP_SEQ,
@@ -1238,7 +1248,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);             
+             1);
 
 --------------- CHARGES DEDUCTION -----------------
 
@@ -1645,7 +1655,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);             
+             1);
 
 --------------- INCIDENT STATUS -----------------
 
@@ -1732,7 +1742,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1); 
+             1);
 
 INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
                            EFF_START_DT,
@@ -1761,7 +1771,7 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);       
+             1);
 
 
 INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
@@ -1791,29 +1801,58 @@ INSERT INTO MW_REF_CD_VAL (REF_CD_SEQ,
              SYSDATE,
              0,
              NULL,
-             1);                     
-             
-             
+             1);
+
+
 
 -------------  insert VEHICLE INSURANCE CLAIM for sawari ------
 
-Insert into MW_TYPS
-   (TYP_SEQ, EFF_START_DT, TYP_ID, TYP_STR, GL_ACCT_NUM, 
-    TYP_STS_KEY, TYP_CTGRY_KEY, CRTD_BY, CRTD_DT, LAST_UPD_BY, 
-    LAST_UPD_DT, DEL_FLG, EFF_END_DT, CRNT_REC_FLG, PERD_FLG, 
-    DFRD_ACCT_NUM, BRNCH_SEQ, BDDT_ACCT_NUM)
- Values
-   (453, SYSDATE, '0453', 'VEHICLE INSURANCE CLAIM', '000.000.203725.00000', 
-    201, 2, 'yousaf.ali', SYSDATE, 'yousaf.ali', 
-    SYSDATE, 0, NULL, 1, 0, 
-    NULL, 0, NULL);
-                 
+INSERT INTO MW_TYPS (TYP_SEQ,
+                     EFF_START_DT,
+                     TYP_ID,
+                     TYP_STR,
+                     GL_ACCT_NUM,
+                     TYP_STS_KEY,
+                     TYP_CTGRY_KEY,
+                     CRTD_BY,
+                     CRTD_DT,
+                     LAST_UPD_BY,
+                     LAST_UPD_DT,
+                     DEL_FLG,
+                     EFF_END_DT,
+                     CRNT_REC_FLG,
+                     PERD_FLG,
+                     DFRD_ACCT_NUM,
+                     BRNCH_SEQ,
+                     BDDT_ACCT_NUM)
+     VALUES (453,
+             SYSDATE,
+             '0453',
+             'VEHICLE INSURANCE CLAIM',
+             '000.000.203725.00000',
+             201,
+             2,
+             'yousaf.ali',
+             SYSDATE,
+             'yousaf.ali',
+             SYSDATE,
+             0,
+             NULL,
+             1,
+             0,
+             NULL,
+             0,
+             NULL);
+
 ----------------- MW_STP_INCDNT ----------------
 
-CREATE SEQUENCE INCDNT_STP_SEQ
-  START WITH 1
-  MAXVALUE 9999999999999999999999999999
-  MINVALUE 1;
+CREATE SEQUENCE PSC_DEF_UNIQUE_NUM_SEQ START WITH 1000
+                                       MAXVALUE 9999999999999999999999999999
+                                       MINVALUE 1000;
+
+CREATE SEQUENCE INCDNT_STP_SEQ START WITH 1
+                               MAXVALUE 9999999999999999999999999999
+                               MINVALUE 1;
 
 CREATE TABLE MW_STP_INCDNT
 (
@@ -1823,120 +1862,134 @@ CREATE TABLE MW_STP_INCDNT
     INCDNT_EFFECTEE           NUMBER NOT NULL,
     PRD_CHRG                  NUMBER NOT NULL,
     FXD_PRMUM                 NUMBER NOT NULL,
-    RVRSE_ALL_ADV             NUMBER (1) CHECK (RVRSE_ALL_ADV IN (0,1)) NOT NULL,
-    RVRSE_ALL_EXPT_SM_MNTH    NUMBER (1) CHECK (RVRSE_ALL_EXPT_SM_MNTH IN (0,1)) NOT NULL,
-    DED_SM_MNTH               NUMBER (1) CHECK (DED_SM_MNTH IN (0,1)) NOT NULL,
+    RVRSE_ALL_ADV             NUMBER (1) CHECK (RVRSE_ALL_ADV IN (0, 1)) NOT NULL,
+    RVRSE_ALL_EXPT_SM_MNTH    NUMBER (1)
+                                 CHECK (RVRSE_ALL_EXPT_SM_MNTH IN (0, 1))
+                                 NOT NULL,
+    DED_SM_MNTH               NUMBER (1)
+                                 CHECK (DED_SM_MNTH IN (0, 1))
+                                 NOT NULL,
     DED_BASE                  NUMBER NOT NULL,
     DED_APLD_ON               NUMBER NOT NULL,
     CRTD_BY                   VARCHAR2 (35 BYTE) NOT NULL,
     CRTD_DT                   DATE DEFAULT SYSDATE NOT NULL,
     LAST_UPD_BY               VARCHAR2 (35 BYTE) NOT NULL,
     LAST_UPD_DT               DATE DEFAULT SYSDATE NOT NULL,
-    DEL_FLG                   NUMBER (1) DEFAULT 0 CHECK (DEL_FLG IN (0,1)) NOT NULL,
+    DEL_FLG                   NUMBER (1)
+                                 DEFAULT 0
+                                 CHECK (DEL_FLG IN (0, 1))
+                                 NOT NULL,
     EFF_END_DT                DATE,
-    CRNT_REC_FLG              NUMBER (1) DEFAULT 1 CHECK (CRNT_REC_FLG IN (0,1)) NOT NULL
+    CRNT_REC_FLG              NUMBER (1)
+                                 DEFAULT 1
+                                 CHECK (CRNT_REC_FLG IN (0, 1))
+                                 NOT NULL
 );
 
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R01 
-  FOREIGN KEY (INCDNT_TYP) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R01 FOREIGN KEY (INCDNT_TYP)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R02
-  FOREIGN KEY (INCDNT_CTGRY) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R02 FOREIGN KEY (INCDNT_CTGRY)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R03
-  FOREIGN KEY (INCDNT_EFFECTEE) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
-  
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R04
-  FOREIGN KEY (PRD_CHRG) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
-  
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R05
-  FOREIGN KEY (FXD_PRMUM) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
-  
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R06
-  FOREIGN KEY (DED_BASE) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
-  
-ALTER TABLE MW_STP_INCDNT ADD (
-  CONSTRAINT MW_STP_INCDNT_R07
-  FOREIGN KEY (DED_APLD_ON) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);          
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R03 FOREIGN KEY (INCDNT_EFFECTEE)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
+
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R04 FOREIGN KEY (PRD_CHRG)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
+
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R05 FOREIGN KEY (FXD_PRMUM)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
+
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R06 FOREIGN KEY (DED_BASE)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
+
+ALTER TABLE MW_STP_INCDNT
+    ADD (
+        CONSTRAINT MW_STP_INCDNT_R07 FOREIGN KEY (DED_APLD_ON)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
+
 --------------------------   MAIN TABLE -----------------------------
 
-CREATE SEQUENCE INCDNT_RPT_SEQ
-  START WITH 1
-  MAXVALUE 9999999999999999999999999999
-  MINVALUE 1;  
+CREATE SEQUENCE INCDNT_RPT_SEQ START WITH 1
+                               MAXVALUE 9999999999999999999999999999
+                               MINVALUE 1;
 
 CREATE TABLE MW_INCDNT_RPT
 (
-    INCDNT_RPT_SEQ    NUMBER (20) PRIMARY KEY NOT NULL,
-    CLNT_SEQ          NUMBER (20) NOT NULL,
-    INCDNT_TYP        NUMBER NOT NULL,
-    INCDNT_CTGRY      NUMBER NOT NULL,
-    INCDNT_EFFECTEE   NUMBER NOT NULL,
-    DT_OF_INCDNT      DATE NOT NULL,
-    CAUSE_OF_INCDNT   VARCHAR2(100),
-    INCDNT_REF        NUMBER(20),
-    INCDNT_REF_RMRKS  VARCHAR2(100),
-    CRTD_BY           VARCHAR2 (35 BYTE) NOT NULL,
-    CRTD_DT           DATE DEFAULT SYSDATE NOT NULL,
-    LAST_UPD_BY       VARCHAR2 (35 BYTE) NOT NULL,
-    LAST_UPD_DT       DATE DEFAULT SYSDATE NOT NULL,
-    DEL_FLG           NUMBER (1) DEFAULT 0 CHECK (DEL_FLG IN (0,1)) NOT NULL,
-    EFF_END_DT        DATE,
-    CRNT_REC_FLG      NUMBER (1) DEFAULT 1 CHECK (CRNT_REC_FLG IN (0,1)) NOT NULL,
-    AMT               NUMBER (10) NOT NULL,
-    CMNT              VARCHAR2 (500 BYTE),
-    CLM_STS           NUMBER (20),
-    INCDNT_STS        NUMBER DEFAULT -1 NOT NULL   
+    INCDNT_RPT_SEQ      NUMBER (20) PRIMARY KEY NOT NULL,
+    CLNT_SEQ            NUMBER (20) NOT NULL,
+    INCDNT_TYP          NUMBER NOT NULL,
+    INCDNT_CTGRY        NUMBER NOT NULL,
+    INCDNT_EFFECTEE     NUMBER NOT NULL,
+    DT_OF_INCDNT        DATE NOT NULL,
+    CAUSE_OF_INCDNT     VARCHAR2 (100),
+    INCDNT_REF          NUMBER (20),
+    INCDNT_REF_RMRKS    VARCHAR2 (100),
+    CRTD_BY             VARCHAR2 (35 BYTE) NOT NULL,
+    CRTD_DT             DATE DEFAULT SYSDATE NOT NULL,
+    LAST_UPD_BY         VARCHAR2 (35 BYTE) NOT NULL,
+    LAST_UPD_DT         DATE DEFAULT SYSDATE NOT NULL,
+    DEL_FLG             NUMBER (1)
+                           DEFAULT 0
+                           CHECK (DEL_FLG IN (0, 1))
+                           NOT NULL,
+    EFF_END_DT          DATE,
+    CRNT_REC_FLG        NUMBER (1)
+                           DEFAULT 1
+                           CHECK (CRNT_REC_FLG IN (0, 1))
+                           NOT NULL,
+    AMT                 NUMBER (10) NOT NULL,
+    CMNT                VARCHAR2 (500 BYTE),
+    CLM_STS             NUMBER (20),
+    INCDNT_STS          NUMBER DEFAULT -1 NOT NULL
 );
 
-ALTER TABLE MW_INCDNT_RPT ADD (
-  CONSTRAINT MW_INCDNT_RPT_R01 
-  FOREIGN KEY (CLNT_SEQ) 
-  REFERENCES MW_CLNT (CLNT_SEQ)
-  ENABLE VALIDATE);
+ALTER TABLE MW_INCDNT_RPT
+    ADD (
+        CONSTRAINT MW_INCDNT_RPT_R01 FOREIGN KEY (CLNT_SEQ)
+            REFERENCES MW_CLNT (CLNT_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_INCDNT_RPT ADD (
-  CONSTRAINT MW_INCDNT_RPT_R02 
-  FOREIGN KEY (INCDNT_TYP) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE); 
+ALTER TABLE MW_INCDNT_RPT
+    ADD (
+        CONSTRAINT MW_INCDNT_RPT_R02 FOREIGN KEY (INCDNT_TYP)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_INCDNT_RPT ADD (
-  CONSTRAINT MW_INCDNT_RPT_R03
-  FOREIGN KEY (INCDNT_CTGRY) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);   
+ALTER TABLE MW_INCDNT_RPT
+    ADD (
+        CONSTRAINT MW_INCDNT_RPT_R03 FOREIGN KEY (INCDNT_CTGRY)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_INCDNT_RPT ADD (
-  CONSTRAINT MW_INCDNT_RPT_R04
-  FOREIGN KEY (INCDNT_EFFECTEE) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);
+ALTER TABLE MW_INCDNT_RPT
+    ADD (
+        CONSTRAINT MW_INCDNT_RPT_R04 FOREIGN KEY (INCDNT_EFFECTEE)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);
 
-ALTER TABLE MW_INCDNT_RPT ADD (
-  CONSTRAINT MW_INCDNT_RPT_R05
-  FOREIGN KEY (INCDNT_STS) 
-  REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
-  ENABLE VALIDATE);  
-  
-  
+ALTER TABLE MW_INCDNT_RPT
+    ADD (
+        CONSTRAINT MW_INCDNT_RPT_R05 FOREIGN KEY (INCDNT_STS)
+            REFERENCES MW_REF_CD_VAL (REF_CD_SEQ)
+            ENABLE VALIDATE);

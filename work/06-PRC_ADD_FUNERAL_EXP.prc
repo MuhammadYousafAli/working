@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
-    P_CLNT_SEQ           NUMBER, --3520173413482
+    P_CLNT_SEQ           NUMBER, --1000000164952
     P_BRNCH_SEQ          NUMBER,
     P_INST_NUM           VARCHAR2,
     P_FUNERAL_AMT        NUMBER, 
@@ -9,7 +9,7 @@ CREATE OR REPLACE PROCEDURE PRC_ADD_FUNERAL_EXP (
     P_POST_FLG           NUMBER,
     P_INCDNT_DT          VARCHAR2,
     P_PYMT_RCT_FLG       NUMBER,
-    P_INCDNT_TYP         VARCHAR2, ---302203
+    P_INCDNT_TYP         VARCHAR2, ---UPFRONT_CASH 
     P_INCDNT_REF         NUMBER,
     P_RTN_MSG        OUT VARCHAR2)
 AS
@@ -115,6 +115,7 @@ BEGIN
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADD_FUNERAL_EXP', P_RTN_MSG);
+        P_RTN_MSG := 'Error in getting Funeral Amount from Incident Setup-0001';
         RETURN;
     END;
     
@@ -244,7 +245,7 @@ BEGIN
                             GROUP BY PSC1.CHRG_TYPS_SEQ)
                    AND PSC.CRNT_REC_FLG = 1)
     LOOP
-        IF (I.REC > 0 AND V_AMT > 0)
+        IF (I.REC > 0 AND V_FUNERAL_AMT_REC > 0)
         THEN
             IF V_COUNT = 0
             THEN                
@@ -318,7 +319,7 @@ BEGIN
                            AND MT.TYP_CTGRY_KEY = 2
                            AND MT.CRNT_REC_FLG = 1
                            AND MT.DEL_FLG = 0;
-                ELSIF P_INCDNT_TYP = 'UPFRONT_CASH'
+                ELSIF P_PYMT_RCT_FLG != 1 -- P_INCDNT_TYP = 'UP-FRONT_CASH'
                 THEN
                     V_NARRATION := 'CASH UP-FRONT ADJUSTMENT';
                     V_JV_HDR_DESC :=
@@ -377,7 +378,7 @@ BEGIN
                              TO_DATE (SYSDATE),
                              V_FUNERAL_AMT_REC,
                              CASE
-                                 WHEN P_INCDNT_TYP = 'DEATH' THEN 750
+                                 WHEN P_PYMT_RCT_FLG = 1 THEN 750
                                  ELSE 161
                              END,
                              NULL,
@@ -403,7 +404,7 @@ BEGIN
                 V_COUNT := 1;
             END IF;                                      --------  V_COUNT = 0
 
-            IF P_INCDNT_TYP = 'UPFRONT_CASH'
+            IF P_PYMT_RCT_FLG != 1 --P_INCDNT_TYP = 'UPFRONT_CASH'
             THEN                        -- ZOHAIB ASIM - DATED 28-09-22 - KSWK
                 --
                 IF I.REC >= V_FUNERAL_AMT_REC
@@ -523,5 +524,6 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADD_FUNERAL_EXP', P_RTN_MSG);
+        P_RTN_MSG := 'Generic Error in Adding Funeral-0001';
         RETURN;       
 END;

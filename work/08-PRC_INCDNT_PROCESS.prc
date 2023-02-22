@@ -2,9 +2,9 @@
 CREATE OR REPLACE PROCEDURE PRC_INCDNT_PROCESS (
     P_INCDNT_DT              VARCHAR2,
     P_CLNT_SEQ               NUMBER,
-    P_INCDNT_TYP             NUMBER,                                  --302142
-    P_INCDNT_CTGRY           NUMBER,                                 -- 302146
-    P_INCDNT_EFFECTEE        NUMBER,                                 -- 302156
+    P_INCDNT_TYP             NUMBER,                                  --302140
+    P_INCDNT_CTGRY           NUMBER,                                 -- 302144
+    P_INCDNT_EFFECTEE        NUMBER,                                 -- 302154 
     P_INCDNT_CAUSE           VARCHAR2,
     P_INCDNT_CMNTS           VARCHAR2,
     P_INCDNT_REF             NUMBER,
@@ -30,6 +30,7 @@ AS
     V_DED_AMT_TOT              NUMBER := 0;
     V_INC_PRIMUM_AMT           NUMBER := 0;
     V_UNIQUE_NUMBER            NUMBER := PSC_DEF_UNIQUE_NUM_SEQ.NEXTVAL;
+    V_INCDNT_REF               NUMBER := 0;
 
     ---------------  FOR REVERSAL ------------------
     V_JV_HDR_SEQ_REV           NUMBER;
@@ -133,8 +134,9 @@ BEGIN
     V_INCDNT_DT := TO_DATE (P_INCDNT_DT, 'DD-MON-RRRR');
 
     --V_INCDNT_DT := '01-JAN-2023';    ------------- P_INCDNT_DT ---------------
-
-
+    V_INCDNT_REF := P_INCDNT_REF;
+    
+   -- V_INCDNT_REF := 120100000125344494;
     ------------  CHECK FOR NACTA TAGGED -------------------------
     SELECT FN_FIND_CLNT_TAGGED ('AML', P_CLNT_SEQ, NULL)
       INTO V_CLNT_TAG
@@ -168,7 +170,16 @@ BEGIN
     THEN
         P_INCDNT_RTN_MSG := 'FAILED: OD CHECK. Client has OD Amount';
         RETURN;
-    END IF;
+    END IF;    
+    
+    SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
+          INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
+          FROM MW_LOAN_APP AP
+         WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
+               AND AP.CRNT_REC_FLG = 1
+               AND AP.LOAN_APP_STS IN (703, 1305)
+      ORDER BY 2 DESC
+    FETCH NEXT 1 ROWS ONLY;
     
     IF P_INCDNT_RVRSE = 0                       ----------  FOR INCIDENT ENTRY
     THEN
@@ -186,7 +197,7 @@ BEGIN
 
         IF V_NOM <> 0
         THEN
-            SELECT MRL.CNIC_NUM
+            SELECT MAX(MRL.CNIC_NUM)
               INTO V_CNIC_NUM
               FROM MW_LOAN_APP  AP
                    JOIN MW_CLNT_REL MRL
@@ -241,15 +252,6 @@ BEGIN
             RETURN;
         END IF;
 
-            SELECT BRNCH_SEQ, AP.PRNT_LOAN_APP_SEQ
-              INTO V_BRNCH_SEQ, V_PRNT_LOAN_APP_SEQ
-              FROM MW_LOAN_APP AP
-             WHERE     AP.CLNT_SEQ = P_CLNT_SEQ
-                   AND AP.CRNT_REC_FLG = 1
-                   AND AP.LOAN_APP_STS IN (703, 1305)
-          ORDER BY 2 DESC
-        FETCH NEXT 1 ROWS ONLY;
-
         -----------  SAVE DATA INTO INCENT REPORT TABLE -----------------
         INSERT INTO MW_INCDNT_RPT (INCDNT_RPT_SEQ,
                                    CLNT_SEQ,
@@ -278,7 +280,7 @@ BEGIN
                      P_INCDNT_CTGRY,
                      V_INCDNT_DT,
                      P_INCDNT_CAUSE,
-                     P_INCDNT_REF,
+                     V_INCDNT_REF,
                      P_INCDNT_REF_RMRKS,
                      P_INCDNT_USER,
                      SYSDATE,
@@ -353,6 +355,7 @@ BEGIN
                     || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
                                              P_INCDNT_RTN_MSG);
+                P_INCDNT_RTN_MSG := 'Issue in getting Incident Setup Values -0001';                             
                 RETURN;
         END;
 
@@ -366,14 +369,21 @@ BEGIN
                                     P_INCDNT_RTN_RCV_MSG);
 
             IF P_INCDNT_RTN_RCV_MSG != 'SUCCESS'
-            THEN
+            THEN                
                 ROLLBACK;
-                KASHF_REPORTING.PRO_LOG_MSG (
-                    'PRC_INCDNT_PROCESS',
-                    P_INCDNT_RTN_RCV_MSG || P_CLNT_SEQ || SQLERRM);
                 P_INCDNT_RTN_MSG :=
-                       'ERROR PRC_INCDNT_PROCESS => P_INCDNT_RTN_RCV_MSG '
-                    || P_INCDNT_RTN_RCV_MSG;
+                       'PRC_INCDNT_PROCESS ==> ERROR IN PRC_INCDNT_RVRSE_RCVRY => LINE NO: '
+                    || $$PLSQL_LINE
+                    || CHR (10)
+                    || ' ERROR CODE: '
+                    || SQLCODE
+                    || ' ERROR MESSAGE: '
+                    || SQLERRM
+                    || 'TRACE: '
+                    || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
+                                             P_INCDNT_RTN_MSG);
+                P_INCDNT_RTN_MSG := 'Issue in Recovery Reversal -0001';                             
                 RETURN;
             END IF;
         ELSIF V_RVRSE_ALL_EXPT_SM_MNTH = 1
@@ -388,14 +398,20 @@ BEGIN
             IF P_INCDNT_RTN_RCV_MSG != 'SUCCESS'
             THEN
                 ROLLBACK;
-                KASHF_REPORTING.PRO_LOG_MSG (
-                    'PRC_INCDNT_PROCESS',
-                    P_INCDNT_RTN_RCV_MSG || P_CLNT_SEQ || SQLERRM);
                 P_INCDNT_RTN_MSG :=
-                       'ERROR PRC_INCDNT_PROCESS => P_INCDNT_RTN_RCV_MSG '
-                    || P_INCDNT_RTN_RCV_MSG
-                    || SQLERRM;
-                RETURN;
+                       'PRC_INCDNT_PROCESS ==> ERROR IN PRC_INCDNT_RVRSE_RCVRY => LINE NO: '
+                    || $$PLSQL_LINE
+                    || CHR (10)
+                    || ' ERROR CODE: '
+                    || SQLCODE
+                    || ' ERROR MESSAGE: '
+                    || SQLERRM
+                    || 'TRACE: '
+                    || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
+                                             P_INCDNT_RTN_MSG);
+                P_INCDNT_RTN_MSG := 'Issue in Recovery Reversal -0002';  
+                RETURN;  
             END IF;
         END IF;
 
@@ -464,13 +480,13 @@ BEGIN
                                  AND IRP.CRNT_REC_FLG = 1
                                  AND AP.LOAN_APP_STS IN (703, 1305)
                                  AND TRUNC (IRP.DT_OF_INCDNT) >=
-                                     TRUNC (DSH.DSBMT_DT))
+                                     TRUNC (DSH.DSBMT_DT)
+                            ORDER BY AP.CRTD_DT)
                 GROUP BY INCDNT_TYP,
                          INCDNT_CTGRY,
                          INCDNT_CHRG,
-                         INCDNT_EFFECTEE,
-                         CRTD_DT
-                ORDER BY CRTD_DT)
+                         INCDNT_EFFECTEE
+                ORDER BY INCDNT_CHRG)
         LOOP
             V_DED_AMT := 0;
 
@@ -498,7 +514,7 @@ BEGIN
                                 TO_NUMBER (STP.FXD_PRMUM_DESC),
                                 P_INCDNT_RTN_MSGCALC,
                                 V_DED_AMT,
-                                V_UNIQUE_NUMBER);
+                                V_UNIQUE_NUMBER);                                
 
                             V_DED_AMT_TOT :=
                                 NVL (V_DED_AMT_TOT, 0) + NVL (V_DED_AMT, 0); --------  SUM ALL THE CHARGES TO BE DEDUCT
@@ -529,7 +545,7 @@ BEGIN
                AND INC.DT_OF_INCDNT = V_INCDNT_DT
                AND INC.CRNT_REC_FLG = 1;
 
-        IF P_INCDNT_REF <> 0
+        IF V_INCDNT_REF <> 0
         THEN
             UPDATE MW_ANML_RGSTR RG
                SET RG.ANML_STS =
@@ -543,7 +559,7 @@ BEGIN
                                AND VL.REF_CD_SEQ = P_INCDNT_CTGRY),
                    RG.LAST_UPD_BY = P_INCDNT_USER,
                    RG.LAST_UPD_DT = SYSDATE
-             WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
+             WHERE RG.ANML_RGSTR_SEQ = V_INCDNT_REF;
         END IF;
     ELSE                         -----------  FOR INCIDENT REVERSAL ----------
         BEGIN
@@ -609,12 +625,19 @@ BEGIN
             THEN
                 ROLLBACK;
                 P_INCDNT_RTN_MSG :=
-                       'ERROR PRC_INCDNT_PROCESS => ISSUE IN GETTING INCIDENT STATUSES FOR REVERSAL..'
-                    || P_INCDNT_RTN_RCV_MSG
-                    || SQLERRM;
-                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
-                                             P_INCDNT_RTN_MSG);
-
+                       'PRC_INCDNT_PROCESS ==> ISSUE IN GETTING INCIDENT STATUSES FOR REVERSAL.. => LINE NO: '
+                    || $$PLSQL_LINE
+                    || CHR (10)
+                    || 'CLNT_SEQ:'
+                    || P_CLNT_SEQ
+                    || ' ERROR CODE: '
+                    || SQLCODE
+                    || ' ERROR MESSAGE: '
+                    || SQLERRM
+                    || 'TRACE: '
+                    || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS', P_INCDNT_RTN_MSG);                
+                P_INCDNT_RTN_MSG := 'Issue in getting Incident Statuses - 0002';
                 RETURN;
         END;
 
@@ -719,7 +742,7 @@ BEGIN
                                   FROM MW_JV_HDR JVH
                                  WHERE     JVH.ENTY_SEQ =
                                            RVSL_EX.RCVRY_TRX_SEQ
-                                       AND JVH.PRNT_VCHR_REF IS NOT NULL);
+                                       AND JVH.PRNT_VCHR_REF IS NULL);
             END LOOP;   ---------- END LOOP REVERSE EXCESS RECOVERY ----------
 
             ---------- ENTER RECOVERY AGAIN IF ANY ------------
@@ -733,9 +756,11 @@ BEGIN
                              AND RCH.CHNG_RSN_CMNT =
                                  (SELECT MAX (RCH1.CHNG_RSN_CMNT)
                                     FROM MW_RCVRY_TRX RCH1
-                                   WHERE     RCH1.PYMT_REF = P_CLNT_SEQ
+                                   WHERE     RCH1.PYMT_REF = P_CLNT_SEQ    
+                                         AND RCH1.CHNG_RSN_CMNT LIKE 'REVERSE DUE TO INCIDENT PROCESS DATED%'
                                          AND RCH1.CRNT_REC_FLG = 0)
                              AND RCH.CRNT_REC_FLG = 0
+                             AND RCH.CHNG_RSN_CMNT LIKE 'REVERSE DUE TO INCIDENT PROCESS DATED%'
                     GROUP BY RCH.RCVRY_TRX_SEQ
                     ORDER BY 1)
             LOOP
@@ -904,8 +929,53 @@ BEGIN
                                          RVSL_REC.RCVRY_TRX_SEQ
                                      AND RCD.CRNT_REC_FLG = 0
                             GROUP BY RCD.PYMT_SCHED_DTL_SEQ);
-            END LOOP;
+            END LOOP;            
 
+            BEGIN
+                PRC_DEF_REVERSAL_CHRGES (P_CLNT_SEQ,
+                                         P_INCDNT_USER,
+                                         P_INCDNT_RTN_MSG_DEF);
+
+                IF P_INCDNT_RTN_MSG_DEF != 'SUCCESS'
+                THEN
+                    ROLLBACK;
+                    P_INCDNT_RTN_MSG :=
+                           'PRC_INCDNT_PROCESS ==> DEFFERED NOT GENERATED SUCCESSFULLY => LINE NO: '
+                        || $$PLSQL_LINE
+                        || CHR (10)
+                        || 'CLNT_SEQ:'
+                        || P_CLNT_SEQ
+                        || ' ERROR CODE: '
+                        || SQLCODE
+                        || ' ERROR MESSAGE: '
+                        || SQLERRM
+                        || 'TRACE: '
+                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS', P_INCDNT_RTN_MSG);
+                    P_INCDNT_RTN_MSG := 'Issue in generation of Deffered Reversal-0001';
+                    RETURN;
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    ROLLBACK;
+                    P_INCDNT_RTN_MSG :=
+                           'PRC_INCDNT_PROCESS ==> DEFFERED NOT GENERATED SUCCESSFULLY => LINE NO: '
+                        || $$PLSQL_LINE
+                        || CHR (10)
+                        || 'CLNT_SEQ:'
+                        || P_CLNT_SEQ
+                        || ' ERROR CODE: '
+                        || SQLCODE
+                        || ' ERROR MESSAGE: '
+                        || SQLERRM
+                        || 'TRACE: '
+                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS', P_INCDNT_RTN_MSG);
+                    P_INCDNT_RTN_MSG := 'Issue in generation of Deffered Reversal-0002';
+                    RETURN;
+            END;
+            
             -------------  REVERSE TAG LIST AND DEATH -----------------------
 
             UPDATE MW_CLNT_TAG_LIST TG
@@ -931,58 +1001,15 @@ BEGIN
                          WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0001')
                    AND RPT.CRNT_REC_FLG = 1;
 
-            IF P_INCDNT_REF <> 0
+            IF V_INCDNT_REF <> 0
             THEN
                 UPDATE MW_ANML_RGSTR RG
                    SET RG.ANML_STS = -1,
                        RG.LAST_UPD_BY = P_INCDNT_USER,
                        RG.LAST_UPD_DT = SYSDATE
-                 WHERE RG.ANML_RGSTR_SEQ = P_INCDNT_REF;
-            END IF;
-
-            BEGIN
-                PRC_DEF_REVERSAL_CHRGES (P_CLNT_SEQ,
-                                         P_INCDNT_USER,
-                                         P_INCDNT_RTN_MSG_DEF);
-
-                IF P_INCDNT_RTN_MSG_DEF != 'SUCCESS'
-                THEN
-                    ROLLBACK;
-                    P_INCDNT_RTN_MSG_DEF :=
-                           'PRC_INCDNT_PROCESS ==> DEFFERED NOT GENERATED SUCCESSFULLY => LINE NO: '
-                        || $$PLSQL_LINE
-                        || CHR (10)
-                        || 'CLNT_SEQ:'
-                        || P_CLNT_SEQ
-                        || ' ERROR CODE: '
-                        || SQLCODE
-                        || ' ERROR MESSAGE: '
-                        || SQLERRM
-                        || 'TRACE: '
-                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
-                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
-                                                 P_INCDNT_RTN_MSG_DEF);
-                    RETURN;
-                END IF;
-            EXCEPTION
-                WHEN OTHERS
-                THEN
-                    ROLLBACK;
-                    P_INCDNT_RTN_MSG_DEF :=
-                           'PRC_INCDNT_PROCESS ==> ISSUE IN FN_DEF_REVERSAL_CHRGES PROCEDURE => LINE NO: '
-                        || $$PLSQL_LINE
-                        || CHR (10)
-                        || 'CLNT_SEQ:'
-                        || P_CLNT_SEQ
-                        || ' ERROR CODE: '
-                        || SQLCODE
-                        || ' ERROR MESSAGE: '
-                        || SQLERRM
-                        || 'TRACE: '
-                        || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
-                    KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS',
-                                                 P_INCDNT_RTN_MSG_DEF);
-            END;
+                 WHERE RG.ANML_RGSTR_SEQ = V_INCDNT_REF;
+            END IF;            
+            
         ELSIF V_INCIDENT_STS = 'FUNERAL SAVED'
         THEN
             UPDATE MW_EXP EX
@@ -1056,8 +1083,8 @@ BEGIN
                                           VL.REF_CD_GRP_KEY
                                       AND GRP.CRNT_REC_FLG = 1
                          WHERE GRP.REF_CD_GRP = '0425' AND VL.REF_CD = '0004');
-        ELSIF V_INCIDENT_STS IN
-                  ('FUNERAL PAID', 'LOAN ADJUSTED AGAINST INCIDENT')
+                         
+        ELSIF V_INCIDENT_STS IN ('FUNERAL PAID')
         THEN
             SELECT JV_HDR_SEQ.NEXTVAL INTO V_JV_HDR_SEQ_FUN FROM DUAL;
 
@@ -1090,11 +1117,11 @@ BEGIN
                  WHERE     UPPER (MJH.ENTY_TYP) = UPPER ('EXPENSE')
                        AND MJH.BRNCH_SEQ = V_BRNCH_SEQ
                        AND MJH.PRNT_VCHR_REF IS NULL
-                       AND MJH.ENTY_SEQ IN
-                               (SELECT EX.EXP_SEQ
+                       AND MJH.ENTY_SEQ =
+                               (SELECT max(EX.EXP_SEQ)
                                   FROM MW_EXP EX
                                  WHERE     (   EX.EXP_REF = P_CLNT_SEQ
-                                            OR EX.EXP_REF = P_INCDNT_REF)
+                                            OR EX.EXP_REF = V_INCDNT_REF)
                                        AND EX.EXPNS_TYP_SEQ IN (424, 423)
                                        AND EX.POST_FLG = 1
                                        AND EX.DEL_FLG = 0);
@@ -1124,13 +1151,13 @@ BEGIN
                                        UPPER ('EXPENSE')
                                    AND MJH.BRNCH_SEQ = V_BRNCH_SEQ
                                    AND MJH.PRNT_VCHR_REF IS NULL
-                                   AND MJH.ENTY_SEQ IN
-                                           (SELECT EX.EXP_SEQ
+                                   AND MJH.ENTY_SEQ =
+                                           (SELECT max(EX.EXP_SEQ)
                                               FROM MW_EXP EX
                                              WHERE     (   EX.EXP_REF =
                                                            P_CLNT_SEQ
                                                         OR EX.EXP_REF =
-                                                           P_INCDNT_REF)
+                                                           V_INCDNT_REF)
                                                    AND EX.EXPNS_TYP_SEQ IN
                                                            (424, 423)
                                                    AND EX.POST_FLG = 1
@@ -1140,7 +1167,7 @@ BEGIN
                SET EX.DEL_FLG = 1,
                    EX.LAST_UPD_BY = P_INCDNT_USER,
                    EX.LAST_UPD_DT = SYSDATE
-             WHERE     (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = P_INCDNT_REF)
+             WHERE     (EX.EXP_REF = P_CLNT_SEQ OR EX.EXP_REF = V_INCDNT_REF)
                    AND EX.EXPNS_TYP_SEQ IN (424, 423)
                    AND EX.DEL_FLG = 0;
 
@@ -1232,7 +1259,8 @@ BEGIN
                                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
                                            AND RCH.POST_FLG = 1
                                            AND RCH.PYMT_STS_KEY = 1001
-                                           AND RCH.CRNT_REC_FLG = 1));
+                                           AND RCH.CRNT_REC_FLG = 1)
+                            group by RCD.PYMT_SCHED_DTL_SEQ);
 
             UPDATE MW_RCVRY_DTL RCD
                SET RCD.CRNT_REC_FLG = 0,
@@ -1243,7 +1271,6 @@ BEGIN
                    (SELECT MAX (RCH.RCVRY_TRX_SEQ)
                       FROM MW_RCVRY_TRX RCH
                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                           AND RCH.POST_FLG = 1
                            AND RCH.PYMT_STS_KEY = 1001
                            AND RCH.CRNT_REC_FLG = 1);
 
@@ -1256,7 +1283,6 @@ BEGIN
                    (SELECT MAX (RCH.RCVRY_TRX_SEQ)
                       FROM MW_RCVRY_TRX RCH
                      WHERE     RCH.PYMT_REF = P_CLNT_SEQ
-                           AND RCH.POST_FLG = 0
                            AND RCH.PYMT_STS_KEY = 1001
                            AND RCH.CRNT_REC_FLG = 1);
 
@@ -1319,6 +1345,7 @@ EXCEPTION
             || 'TRACE: '
             || SYS.DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
         KASHF_REPORTING.PRO_LOG_MSG ('PRC_INCDNT_PROCESS', P_INCDNT_RTN_MSG);
+        P_INCDNT_RTN_MSG := 'Generic Error in PRC_INCDNT_PROCESS Proc..';
         RETURN;
 END;
 /
