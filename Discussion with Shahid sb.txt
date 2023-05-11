@@ -1,0 +1,20 @@
+Soap Request: 
+
+NewMW
+1. Trigger on Loan App. sends data to ADC Dsb Que
+	a. it has two statuses:
+		1. Kashf Status ( in-process, processed )  status will be added as Cancel.
+		2. Bank Status (Pending, Unpaid, Paid, Cancel, Hold, Duplicate) all the combination should be on Excel
+ADC
+2. Cron Job 1: execute every 10 minutes
+	1. it pushes data to MCB Server.
+		it updates status in NEWMW. Que and Trx table as (Kashf status as Process, Bank: Unpaid) 
+		total records shared with MCB are 1000.
+	2. Get status for that loan and sets in Qua and TRX table.
+
+3.Cron Job 2: executes every 3 minutes.
+	2. Get status for each disbursments for inprocesses statuses from MCB and sets into both Que and Trx tables.
+
+
+===========================================================
+
