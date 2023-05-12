@@ -8,6 +8,26 @@ Insert into ADC_REF_CD_VAL
     'Bank of Punjab Disbursements', 1, SYSDATE, 'yousaf.ali', NULL, 
     NULL);
 
+--------------  BOP DISBURSEMENT INQUIRY ------------
+
+Insert into ADC_REF_CD_VAL
+   ( REF_CD_VAL_SEQ, REF_CD_GRP_CODE, REF_CD_VAL_CODE, REF_CD_VAL_DESC, REF_CD_VAL_SHRT_DESC, 
+    REMARKS, CRNT_REC_FLG, CRTD_DT, CRTD_BY, LAST_UPD_AT, 
+    LAST_UPD_BY)
+ Values
+   (REF_CD_GRP_VAL_SEQ.nextval, '0004', '0004', 'BOP DISBURSEMENT INQUIRY', ' ', 
+    NULL, 1, SYSDATE, 'yousaf.ali', NULL, 
+    NULL);
+
+Insert into ADC_REF_CD_VAL
+   ( REF_CD_VAL_SEQ, REF_CD_GRP_CODE, REF_CD_VAL_CODE, REF_CD_VAL_DESC, REF_CD_VAL_SHRT_DESC, 
+    REMARKS, CRNT_REC_FLG, CRTD_DT, CRTD_BY, LAST_UPD_AT, 
+    LAST_UPD_BY)
+ Values
+   (REF_CD_GRP_VAL_SEQ.nextval, '0004', '0005', 'BOP DISBURSEMENT PYMTS', ' ', 
+    NULL, 1, SYSDATE, 'yousaf.ali', NULL, 
+    NULL);
+
 -----------------   INQUIRY AND PAYMENTS ----------
 
 Insert into ADC_REF_CD_GRP
