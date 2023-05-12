@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION PRC_BOP_EMPTY_RSP(P_RSP_CODE VARCHAR2)
+CREATE OR REPLACE FUNCTION MWX_KASHF_DEV.PRC_BOP_EMPTY_RSP(P_RSP_CODE VARCHAR2, P_PYMT_STS CHAR )
 return varchar2
 AS
     CURSOR CR IS
@@ -9,7 +9,7 @@ AS
                             'client_cnic' VALUE NULL,
                             'kashf_branch' VALUE NULL,
                             'loan_date' VALUE NULL,
-                            'payment_status' VALUE NULL,
+                            'payment_status' VALUE P_PYMT_STS,
                             'amount' VALUE NULL,
                             'reserved' VALUE NULL)
                    AS json_body
@@ -22,5 +22,4 @@ BEGIN
     END LOOP;
     
 END;
-
-
+/

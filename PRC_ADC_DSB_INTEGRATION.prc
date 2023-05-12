@@ -71,6 +71,7 @@ AS
     V_VENDOR_FOUND     NUMBER := NULL;
     V_USER_FOUND       NUMBER := NULL;
     V_LOAN_APP_FOUND   NUMBER := NULL;
+    V_PAID_ALREADY     NUMBER := NULL;
 BEGIN
     -------  BASIC AUTHENTICATION ---------------------
 
@@ -84,7 +85,7 @@ BEGIN
     EXCEPTION
         WHEN NO_DATA_FOUND
         THEN
-            SELECT PRC_BOP_EMPTY_RSP ('0005') INTO P_RSP_JSON FROM DUAL;
+            SELECT PRC_BOP_EMPTY_RSP ('0005','I') INTO P_RSP_JSON FROM DUAL;
 
             P_RTN_MSG := 'BOP: Vendor Entry Missing';
             KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
@@ -92,7 +93,7 @@ BEGIN
             RETURN;
         WHEN OTHERS
         THEN
-            SELECT PRC_BOP_EMPTY_RSP ('0005') INTO P_RSP_JSON FROM DUAL;
+            SELECT PRC_BOP_EMPTY_RSP ('0005', 'I') INTO P_RSP_JSON FROM DUAL;
 
             P_RTN_MSG := 'BOP: Generic Issue while getting Vendor Entry';
             KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
@@ -113,7 +114,7 @@ BEGIN
 
     IF V_USER_FOUND = 0
     THEN
-        SELECT PRC_BOP_EMPTY_RSP ('0003') INTO P_RSP_JSON FROM DUAL;
+        SELECT PRC_BOP_EMPTY_RSP ('0003','I') INTO P_RSP_JSON FROM DUAL;
 
         P_RTN_MSG :=
                'BOP: User or Password not found against this Vendor: P_USERPASS | '
@@ -159,7 +160,7 @@ BEGIN
             OR LENGTH (transaction_time) != 6
             OR LENGTH (branch_code) != 10)
         THEN
-            SELECT PRC_BOP_EMPTY_RSP ('0004') INTO P_RSP_JSON FROM DUAL;
+            SELECT PRC_BOP_EMPTY_RSP ('0004','I') INTO P_RSP_JSON FROM DUAL;
 
             P_RTN_MSG :=
                 'BOP: Invalid data/ Data is not according to Document';
@@ -167,6 +168,19 @@ BEGIN
                                          P_RTN_MSG);
             RETURN;
         END IF;
+
+        IF transaction_date <> TO_CHAR(SYSDATE,'RRRRMMDD') --- check if trns date is not current date
+        THEN
+            SELECT PRC_BOP_EMPTY_RSP ('0004','I') INTO P_RSP_JSON FROM DUAL;
+
+            P_RTN_MSG :=
+                'BOP: Invalid data/ Date should be current Date';
+            KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
+                                         P_RTN_MSG);
+            RETURN;
+        END IF;
+
+
 
         SELECT COUNT (1)
           INTO V_LOAN_APP_FOUND
@@ -210,17 +224,32 @@ BEGIN
                     UPDATE ADC_DSBMT_TRX AND MARK AS CANCELLED.
                 */
                  
-                 
+                SELECT PRC_BOP_EMPTY_RSP ('0001','R') INTO P_RSP_JSON FROM DUAL;
+
+                P_RTN_MSG :=
+                    'BOP: Loan App Seq/ reference_no not found/ or not active loan/ or canceled';
+                KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
+                                             P_RTN_MSG);
+                RETURN; 
                 
             END IF;
 
-            SELECT PRC_BOP_EMPTY_RSP ('0001') INTO P_RSP_JSON FROM DUAL;
+            
+        END IF;
 
+        SELECT COUNT(1)
+            INTO V_PAID_ALREADY
+        FROM MW_ADC_DSBMT_QUE  ADQ
+        WHERE ADQ.IS_PROCESSED = 1
+        AND ADQ.LOAN_APP_SEQ = reference_no;
+        
+        IF V_PAID_ALREADY != 0
+        THEN
+            SELECT PRC_BOP_EMPTY_RSP ('0005','P') INTO P_RSP_JSON FROM DUAL;
             P_RTN_MSG :=
-                'BOP: Loan App Seq/ reference_no not found/ or not active loan/ or canceled';
+                'BOP: Loan App Seq already paid';
             KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
                                          P_RTN_MSG);
-            RETURN;
         END IF;
 
 
@@ -343,8 +372,9 @@ BEGIN
         EXCEPTION
             WHEN OTHERS
             THEN
-                ROLLBACK;
-                SELECT PRC_BOP_EMPTY_RSP ('0002') INTO P_RSP_JSON FROM DUAL;
+                ROLLBACK;                
+                
+                SELECT PRC_BOP_EMPTY_RSP ('0002','I') INTO P_RSP_JSON FROM DUAL;
                 P_RTN_MSG :=
                     'BOP: Generic Issue while getting Disbursement Details';
                 KASHF_REPORTING.PRO_LOG_MSG ('PRC_ADC_DSB_INTEGRATION',
