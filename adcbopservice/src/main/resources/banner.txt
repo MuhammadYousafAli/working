@@ -1,0 +1,6 @@
+,-----.   ,-----. ,------.
+|  |) /_ '  .-.  '|  .--. '
+|  .-.  \|  | |  ||  '--' |
+|  '--' /'  '-'  '|  | --'
+`------'  `-----' `--'
+${spring.application.name} - ${spring.application.version} - ${spring-boot.version}
